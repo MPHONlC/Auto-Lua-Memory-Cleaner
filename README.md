@@ -3,7 +3,7 @@ A lightweight, event driven background memory cleaner designed to eliminate perf
 
 ## Dependencies
 This addon requires the following library to access the settings menu:
-* [LibAddonMenu-2.0](https://www.esoui.com/downloads/info7-LibAddonMenu-2.0.html)
+* [LibAddonMenu-2.0](https://www.esoui.com/downloads/info4388-AutoLuaMemoryCleaner.html#info)
 
 ## Why use this over other memory cleaners? 
 Other memory cleaners uses a constant "OnUpdate" timers that pings the game every few seconds to check your memory, the timer loops endlessly from the moment you log in, they do often pauses the cleanup, but the polling loop keeps firing in the background even during fights, they also often calculate memory strings even when the UI is hidden or closed, they are built before console APIs existed, they only track "collectgarbage", ignoring console UI limits, all of which unnecessarily wastes CPU cycles. Auto Lua Memory Cleaner uses a **dormant, event driven trigger**. It stays completely asleep (using 0% CPU) and only wakes up to check your memory during natural breaks while playing, such as right after you exit combat or close a menu.
