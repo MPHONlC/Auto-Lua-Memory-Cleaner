@@ -208,6 +208,25 @@ function ALC:BuildMenu()
     
     local optionsData = {}
     
+    local isEU = (GetWorldName() == "EU Megaserver")
+    if not IsConsoleUI() and not isEU then
+        table.insert(optionsData, {
+            type = "button",
+            name = "|cFFD700DONATE|r to @|ca500f3A|r|cb400e6P|r|cc300daH|r|cd200cdO|r|ce100c1NlC|r",
+            tooltip = "Opens the in-game mail. Thank you! Donations help support continued development and maintenance.",
+            func = function()
+                SCENE_MANAGER:Show("mailSend")
+                zo_callLater(function()
+                    ZO_MailSendToField:SetText("@APHONlC")
+                    ZO_MailSendSubjectField:SetText("Auto Lua Cleaner Support")
+                    ZO_MailSendBodyField:TakeFocus()
+                end, 200)
+            end,
+            width = "full"
+        })
+        table.insert(optionsData, { type = "divider" })
+    end
+    
     table.insert(optionsData, {
         type = "checkbox",
         name = "Enable Auto Cleanup",
@@ -221,7 +240,7 @@ function ALC:BuildMenu()
             type = "slider",
             name = "Console Memory Threshold (MB)",
             tooltip = "Triggers a cleanup when console memory hits this amount (Default: 85). Console hard-limit is 100MB.",
-            min = 50, max = 95, step = 1,
+            min = 10, max = 95, step = 1,
             getFunc = function() return ALC.settings.thresholdConsole end,
             setFunc = function(value) ALC.settings.thresholdConsole = value end
         })
@@ -247,13 +266,15 @@ function ALC:BuildMenu()
     
     table.insert(optionsData, { type = "divider" })
     
-    table.insert(optionsData, {
-        type = "checkbox",
-        name = "Enable Chat Logs",
-        tooltip = "Shows status messages in your chat window when memory is cleaned.",
-        getFunc = function() return ALC.settings.logEnabled end,
-        setFunc = function(value) ALC.settings.logEnabled = value end
-    })
+    if not IsConsoleUI() then
+        table.insert(optionsData, {
+            type = "checkbox",
+            name = "Enable Chat Logs",
+            tooltip = "Shows status messages in your chat window when memory is cleaned.",
+            getFunc = function() return ALC.settings.logEnabled end,
+            setFunc = function(value) ALC.settings.logEnabled = value end
+        })
+    end
     
     table.insert(optionsData, {
         type = "checkbox",
@@ -312,6 +333,44 @@ function ALC:BuildMenu()
         func = function() ALC:RunCleanup() end,
         width = "full"
     })
+    
+    table.insert(optionsData, { type = "divider" })
+    
+    if IsConsoleUI() then
+        table.insert(optionsData, {
+            type = "button",
+            name = "|cFFD700Buy Me A Coffee|r",
+            tooltip = "Thank you! Donations help support continued development and maintenance!\n\nLink: https://buymeacoffee.com/aph0nlc",
+            func = function() end,
+            width = "full"
+        })
+        table.insert(optionsData, {
+            type = "button",
+            name = "|cFF0000BUG REPORT|r",
+            tooltip = "Found an issue? Report it on ESOUI or Github:\n\nhttps://www.esoui.com/portal.php?id=360&a=listbugs",
+            func = function() end,
+            width = "full"
+        })
+    else
+        table.insert(optionsData, {
+            type = "button",
+            name = "|cFFD700Buy Me A Coffee|r",
+            tooltip = "Thank you! Donations help support continued development and maintenance! Opens a secure link to my Buy Me A Coffee page in your default web browser.",
+            func = function() 
+                RequestOpenUnsafeURL("https://buymeacoffee.com/aph0nlc") 
+            end,
+            width = "full"
+        })
+        table.insert(optionsData, {
+            type = "button",
+            name = "|cFF0000BUG REPORT|r",
+            tooltip = "Found an issue? Opens the Bug Portal on ESOUI in your default web browser.",
+            func = function() 
+                RequestOpenUnsafeURL("https://www.esoui.com/portal.php?id=360&a=listbugs") 
+            end,
+            width = "full"
+        })
+    end
 
     LAM:RegisterAddonPanel("AutoLuaCleanerOptions", panelData)
     LAM:RegisterOptionControls("AutoLuaCleanerOptions", optionsData)
@@ -326,6 +385,7 @@ function ALC:IntegrateWithPermMemento()
         ALC.settings.pmOverridden = true
     end
 end
+
 -- Initialization
 function ALC:Init(eventCode, addOnName)
     if addOnName ~= self.name then return end
