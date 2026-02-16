@@ -3,7 +3,8 @@
 -----------------------------------------------------------
 local ALC = {
     name = "AutoLuaMemoryCleaner",
-    version = "0.0.3",
+    version = "0.0.4",
+    -- Default settings
     defaults = {
         enabled = true,
         thresholdPC = 400,
@@ -14,12 +15,95 @@ local ALC = {
         showUI = true,
         uiLocked = false,
         uiX = nil,
-        uiY = nil
+        uiY = nil,
+        -- Stats
+        totalCleanups = 0,
+        totalMBFreed = 0,
+        lastSessionCleanups = 0,
+        lastSessionMBFreed = 0,
+        prevSessionCleanups = 0,
+        prevSessionMBFreed = 0,
+        installDate = nil,
+        versionHistory = {}
     },
     memState = 0,
-    isMemCheckQueued = false
+    isMemCheckQueued = false,
+    sessionCleanups = 0,
+    sessionMBFreed = 0,
+    lastPrioritySaveTime = 0
 }
+-- LibAddonMenu-2.0 Version
+local REQUIRED_LAM_VERSION = 41
 
+-- Check if LibAddonMenu-2.0 is running and get its loaded version
+local function GetLAMVersion()
+    local am = GetAddOnManager()
+    for i = 1, am:GetNumAddOns() do
+        local name, _, _, _, _, state = am:GetAddOnInfo(i)
+        if name == "LibAddonMenu-2.0" and state == ADDON_STATE_ENABLED then
+            return true, am:GetAddOnVersion(i)
+        end
+    end
+    return false, 0
+end
+
+-- Live statistics
+function ALC:GetStatsText()
+    local currentMB = IsConsoleUI() and GetTotalUserAddOnMemoryPoolUsageMB() or (collectgarbage("count") / 1024)
+    
+    local memWarning = ""
+    local luaLimitTxt = ""
+    if IsConsoleUI() then
+        luaLimitTxt = "100 MB (Hard Limit)"
+        if currentMB > 85 then memWarning = "|cFF0000(EXCEEDS CONSOLE LIMIT)|r"
+        else memWarning = "|c00FF00(Safe)|r" end
+    else
+        luaLimitTxt = "Dynamic [512MB] (Auto-Scaling)"
+        if currentMB > 400 then memWarning = "|cFFA500(High Global Memory)|r"
+        else memWarning = "|c00FF00(Safe)|r" end
+    end
+    
+    local installDate = self.settings.installDate or "Unknown"
+    local vHistory = self.settings.versionHistory or {self.version}
+    local vHistoryText = table.concat(vHistory, ", ")
+    
+    local _, lamVersion = GetLAMVersion()
+    local lamText = lamVersion > 0 and tostring(lamVersion) or "Not Installed"
+
+    return string.format(
+        "Installed Since: %s\nVersion History: %s\nLibAddonMenu-2.0 Version: %s\nMax Lua Memory: %s\nCurrent Global Memory: %.2f MB %s\n\n|c00FF00[Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %.2f MB\n\n|cFFA500[Previous Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %.2f MB\n\n|c00FFFF[Lifetime Statistics]|r\nTotal Cleanups: %d\nTotal Memory Freed: %.2f MB", 
+        installDate, vHistoryText, lamText, luaLimitTxt, currentMB, memWarning,
+        self.sessionCleanups, self.sessionMBFreed, 
+        self.settings.prevSessionCleanups or 0, self.settings.prevSessionMBFreed or 0,
+        self.settings.totalCleanups or 0, self.settings.totalMBFreed or 0
+    )
+end
+
+-- Data Migration
+function ALC:MigrateData()
+    -- Erase obsolete data
+    if self.settings then
+        self.settings.pmOverridden = nil
+    end
+
+    if _G["AutoLuaCleaner"] then
+        for worldName, worldData in pairs(_G["AutoLuaCleaner"]) do
+            if type(worldData) == "table" then
+                for accountName, accountData in pairs(worldData) do
+                    if type(accountData) == "table" then
+                        for profileId, profileData in pairs(accountData) do
+                            if type(profileData) == "table" then
+                                profileData["pmOverridden"] = nil
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Memory Cleanup
 function ALC:RunCleanup()
     self.memState = 1
     zo_callLater(function()
@@ -28,6 +112,28 @@ function ALC:RunCleanup()
         local after = collectgarbage("count") / 1024
         local freed = before - after
         self.memState = 0
+        
+        -- Update session and lifetime statistics if memory was actually freed
+        if freed > 0 then
+            self.sessionCleanups = self.sessionCleanups + 1
+            self.sessionMBFreed = self.sessionMBFreed + freed
+            
+            if self.settings then
+                self.settings.totalCleanups = (self.settings.totalCleanups or 0) + 1
+                self.settings.totalMBFreed = (self.settings.totalMBFreed or 0) + freed
+                
+                -- update last session data
+                self.settings.lastSessionCleanups = self.sessionCleanups
+                self.settings.lastSessionMBFreed = self.sessionMBFreed
+                
+                -- save without reloading UI
+                local now = GetGameTimeMilliseconds()
+                if (now - self.lastPrioritySaveTime) >= 900000 then
+                    GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
+                    self.lastPrioritySaveTime = now
+                end
+            end
+        end
         
         local msg = string.format("Memory Freed %.2f MB", freed)
         
@@ -192,8 +298,25 @@ function ALC:CreateUI()
     self:UpdateUIScenes()
 end
 
--- Settings Menu
+-- LibAddonMenu UI Settings
 function ALC:BuildMenu()
+    -- Check LAM version and prevent menu from loading if LAM is outdated
+    local isLAMInstalled, lamVersion = GetLAMVersion()
+    if not isLAMInstalled then return end
+
+    if lamVersion < REQUIRED_LAM_VERSION then
+        zo_callLater(function()
+            local msg = string.format("|cFFFF00Warning: LibAddonMenu is outdated (v%d). Update to v%d+ for ALC menu.|r", lamVersion, REQUIRED_LAM_VERSION)
+            if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|cFF0000[ALC]|r " .. msg) end
+            if CENTER_SCREEN_ANNOUNCE then
+                local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
+                params:SetText(msg); params:SetLifespanMS(6000)
+                CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
+            end
+        end, 4000)
+        return
+    end
+
     local LAM = LibAddonMenu2 or _G["LibAddonMenu"]
     if not LAM then return end
 
@@ -207,6 +330,10 @@ function ALC:BuildMenu()
     }
     
     local optionsData = {}
+    
+    if IsConsoleUI() then
+        table.insert(optionsData, { type = "button", name = "|c00FF00ALC LIVE STATS|r", tooltip = function() return ALC:GetStatsText() end, func = function() end, width = "full" })
+    end
     
     local isEU = (GetWorldName() == "EU Megaserver")
     if not IsConsoleUI() and not isEU then
@@ -334,6 +461,13 @@ function ALC:BuildMenu()
         width = "full"
     })
     
+    if not IsConsoleUI() then
+        local liveStatsBlock = { type = "submenu", name = "ALC Live Statistics", tooltip = "Live tracking of memory cleanup data.", controls = {
+            { type = "description", title = "|c00FFFFLive Statistics|r", text = "Loading statistics...", reference = "ALC_StatsText" }
+        }}
+        table.insert(optionsData, liveStatsBlock)
+    end
+    
     table.insert(optionsData, { type = "divider" })
     
     if IsConsoleUI() then
@@ -382,7 +516,6 @@ function ALC:IntegrateWithPermMemento()
         pmCore.settings.autoCleanup = false
         pmCore.settings.csaCleanupEnabled = false
         EVENT_MANAGER:UnregisterForUpdate(pmCore.name .. "_MemFallback")
-        ALC.settings.pmOverridden = true
     end
 end
 
@@ -394,8 +527,43 @@ function ALC:Init(eventCode, addOnName)
     local world = GetWorldName() or "Default"
     self.settings = ZO_SavedVars:NewAccountWide("AutoLuaCleaner", 1, "AccountWide", self.defaults, world)
     
+    -- Run Data Migration first
+    self:MigrateData()
+
+    -- Manage Session Statistics for previous session data
+    self.settings.prevSessionCleanups = self.settings.lastSessionCleanups or 0
+    self.settings.prevSessionMBFreed = self.settings.lastSessionMBFreed or 0
+    self.settings.lastSessionCleanups = 0
+    self.settings.lastSessionMBFreed = 0
+    
+    if not self.settings.installDate then
+        local d = GetDate()
+        if d and type(d) == "number" then d = tostring(d) end
+        if d and string.len(d) == 8 then
+            self.settings.installDate = string.sub(d, 1, 4) .. "/" .. string.sub(d, 5, 6) .. "/" .. string.sub(d, 7, 8)
+        else
+            self.settings.installDate = GetDateStringFromTimestamp(GetTimeStamp())
+        end
+    end
+    
+    if not self.settings.versionHistory then self.settings.versionHistory = {} end
+    local vLen = #self.settings.versionHistory
+    if vLen == 0 or self.settings.versionHistory[vLen] ~= self.version then
+        table.insert(self.settings.versionHistory, self.version)
+        if #self.settings.versionHistory > 3 then table.remove(self.settings.versionHistory, 1) end
+    end
+    
     self:CreateUI()
     self:BuildMenu()
+    
+    if not IsConsoleUI() then
+        EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_StatsUpdate", 1000, function()
+            local statsCtrl = _G["ALC_StatsText"]
+            if statsCtrl and statsCtrl.desc and not statsCtrl:IsHidden() then
+                statsCtrl.desc:SetText(ALC:GetStatsText())
+            end
+        end)
+    end
     
     EVENT_MANAGER:RegisterForEvent(self.name, EVENT_PLAYER_ACTIVATED, function() 
         self:IntegrateWithPermMemento()
