@@ -610,7 +610,7 @@ function ALC:Init(eventCode, addOnName)
             return
         end
     end
-
+    -- Command Aliases
     SLASH_COMMANDS["/alcon"] = function()
         self.settings.enabled = not self.settings.enabled
         local status = self.settings.enabled and "|c00FF00ON|r" or "|cFF0000OFF|r"
