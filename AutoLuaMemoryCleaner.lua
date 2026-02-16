@@ -154,8 +154,8 @@ end
 
 function ALC:TriggerMemoryCheck(checkType, delay)
     if not self.settings.enabled then return end
-    if self.memState == 1 or self.isMemCheckQueued then return end 
-
+    if self.memState == 1 or self.isMemCheckQueued then return end -- Prevent overlapping checks if a cleanup is already happening
+    -- Check if memory is above platform threshold. If not, IGNORE.
     local currentMB = IsConsoleUI() and GetTotalUserAddOnMemoryPoolUsageMB() or (collectgarbage("count") / 1024)
     local threshold = IsConsoleUI() and self.settings.thresholdConsole or self.settings.thresholdPC 
 
@@ -163,24 +163,24 @@ function ALC:TriggerMemoryCheck(checkType, delay)
         local inCombat = IsUnitInCombat and IsUnitInCombat("player")
         if inCombat or IsUnitDead("player") then return end
 
-        self.isMemCheckQueued = true 
-
+        self.isMemCheckQueued = true -- Lock the queue
+        -- Start delay
         zo_callLater(function()
             self.isMemCheckQueued = false
             if self.memState == 1 then return end
-
+            -- check state after delay
             local stillInCombat = IsUnitInCombat and IsUnitInCombat("player")
             if stillInCombat or IsUnitDead("player") then return end
-
+            -- Menu Intent Check
             if checkType == "Menu" then
                 local inMenu = SCENE_MANAGER and not (SCENE_MANAGER:IsShowing("hud") or SCENE_MANAGER:IsShowing("hudui"))
-                if not inMenu then return end 
+                if not inMenu then return end -- Exited before 2s ran out, IGNORE
             end
-
+            -- Memory Check & Execution
             local recheckMB = IsConsoleUI() and GetTotalUserAddOnMemoryPoolUsageMB() or (collectgarbage("count") / 1024)
             if recheckMB >= threshold then
                 self:RunCleanup()
-                
+                -- Fallback timer
                 EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
                 EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_Fallback", self.settings.fallbackDelayS * 1000, function() 
                     ALC:TriggerMemoryCheck("Fallback", 0) 
@@ -188,6 +188,7 @@ function ALC:TriggerMemoryCheck(checkType, delay)
             end
         end, delay)
     else
+        -- Go Dormant and kill Timers
         EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
         self.memState = 0
     end
