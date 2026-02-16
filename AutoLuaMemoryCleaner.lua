@@ -597,18 +597,21 @@ function ALC:Init(eventCode, addOnName)
     SLASH_COMMANDS["/alc"] = function(extra)
         local cmd = extra:lower()
         if cmd == "" then
+            local palette = {"FF5733", "33FF57", "3357FF", "F333FF", "FF33A8", "33FFF5", "F5FF33", "FF8F33", "8F33FF", "33FF8F", "FF3333", "33FFFF", "FFFF33", "FF00FF", "00FFCC", "CC00FF", "FFCC00", "00BFFF", "FF1493", "7CFC00"}
+            local function RC() return "|c" .. palette[math.random(#palette)] end
+
             local cmds = "|c00FF00Available ALC Commands:|r\n"
-            cmds = cmds .. "|c33FFF5/alcon|r (or |c33FFF5/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n"
-            cmds = cmds .. "|cFF33A8/alcui|r (or |cFF33A8/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n"
-            cmds = cmds .. "|c33FF57/alclock|r (or |c33FF57/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n"
-            cmds = cmds .. "|cFFCC00/alcreset|r (or |cFFCC00/alcuireset|r) |cFFD700- Reset Memory UI position|r\n"
-            cmds = cmds .. "|cF333FF/alccsa|r (or |cF333FF/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n"
+            cmds = cmds .. RC() .. "/alcon|r (or /alcenable) |cFFD700- Toggle Auto Cleanup|r\n"
+            cmds = cmds .. RC() .. "/alcui|r (or /alctoggleui) |cFFD700- Toggle Memory UI visibility|r\n"
+            cmds = cmds .. RC() .. "/alclock|r (or /alcuilock) |cFFD700- Lock/Unlock UI dragging|r\n"
+            cmds = cmds .. RC() .. "/alcreset|r (or /alcuireset) |cFFD700- Reset Memory UI position|r\n"
+            cmds = cmds .. RC() .. "/alccsa|r (or /alctogglecsa) |cFFD700- Toggle Screen Announcements|r\n"
             if not IsConsoleUI() then
-                cmds = cmds .. "|c00BFFF/alclogs|r (or |c00BFFF/alcchatlogs|r) |cFFD700- Toggle Chat Logs|r\n"
+                cmds = cmds .. RC() .. "/alclogs|r (or /alcchatlogs) |cFFD700- Toggle Chat Logs|r\n"
             end
-            cmds = cmds .. "|cFF5733/alcclean|r (or |cFF5733/alccleanup|r) |cFFD700- Force a manual Lua memory cleanup|r"
+            cmds = cmds .. RC() .. "/alcclean|r (or /alccleanup) |cFFD700- Force a manual Lua memory cleanup|r"
             
-            if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage(cmds) end
+            if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r\n" .. cmds) end
             return
         end
     end
