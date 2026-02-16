@@ -592,7 +592,7 @@ function ALC:Init(eventCode, addOnName)
         end)
     end
 
-    -- Integrated Slash Commands
+    -- Slash Commands
     SLASH_COMMANDS["/alc"] = function(extra)
         local cmd = extra:lower()
         if cmd == "" then
