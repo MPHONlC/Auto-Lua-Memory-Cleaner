@@ -3,7 +3,7 @@
 -----------------------------------------------------------
 local ALC = {
     name = "AutoLuaMemoryCleaner",
-    version = "0.0.4",
+    version = "0.0.5",
     -- Default settings
     defaults = {
         enabled = true,
