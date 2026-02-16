@@ -332,8 +332,8 @@ function ALC:BuildMenu()
     
     local optionsData = {}
     
-    local consoleCmds = "|c33FFF5/alcon|r (or /alcenable) |cFFD700- Toggle Auto Cleanup|r\n\n|cFF33A8/alcui|r (or /alctoggleui) |cFFD700- Toggle Memory UI visibility|r\n\n|c33FF57/alclock|r (or /alcuilock) |cFFD700- Lock/Unlock UI dragging|r\n\n|cFFCC00/alcreset|r (or /alcuireset) |cFFD700- Reset Memory UI position|r\n\n|cF333FF/alccsa|r (or /alctogglecsa) |cFFD700- Toggle Screen Announcements|r\n\n|cFF5733/alcclean|r (or /alccleanup) |cFFD700- Force manual Lua memory cleanup|r"
-    local pcCmdsText = "|c33FFF5/alcon|r (or /alcenable) |cFFD700- Toggle Auto Cleanup|r\n|cFF33A8/alcui|r (or /alctoggleui) |cFFD700- Toggle Memory UI visibility|r\n|c33FF57/alclock|r (or /alcuilock) |cFFD700- Lock/Unlock UI dragging|r\n|cFFCC00/alcreset|r (or /alcuireset) |cFFD700- Reset Memory UI position|r\n|cF333FF/alccsa|r (or /alctogglecsa) |cFFD700- Toggle Screen Announcements|r\n|c00BFFF/alclogs|r (or /alcchatlogs) |cFFD700- Toggle Chat Logs|r\n|cFF5733/alcclean|r (or /alccleanup) |cFFD700- Force a manual Lua memory cleanup|r"
+    local consoleCmds = "|cFFFFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n\n|cFFFFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n\n|cFFFFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n\n|cFFFFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n\n|cFFFFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n\n|cFFFFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force manual Lua memory cleanup|r"
+    local pcCmdsText = "|cFFFFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n|cFFFFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n|cFFFFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n|cFFFFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n|cFFFFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n|cFFFFFF/alclogs|r (or |cFF0000/alcchatlogs|r) |cFFD700- Toggle Chat Logs|r\n|cFFFFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force a manual Lua memory cleanup|r"
 
     if IsConsoleUI() then
         table.insert(optionsData, { type = "button", name = "|c00FF00ALC LIVE STATS|r", tooltip = function() return ALC:GetStatsText() end, func = function() end, width = "full" })
@@ -597,19 +597,16 @@ function ALC:Init(eventCode, addOnName)
     SLASH_COMMANDS["/alc"] = function(extra)
         local cmd = extra:lower()
         if cmd == "" then
-            local palette = {"FF5733", "33FF57", "3357FF", "F333FF", "FF33A8", "33FFF5", "F5FF33", "FF8F33", "8F33FF", "33FF8F", "FF3333", "33FFFF", "FFFF33", "FF00FF", "00FFCC", "CC00FF", "FFCC00", "00BFFF", "FF1493", "7CFC00"}
-            local function RC() return "|c" .. palette[math.random(#palette)] end
-
             local cmds = "|c00FF00Available ALC Commands:|r\n"
-            cmds = cmds .. RC() .. "/alcon|r (or /alcenable) |cFFD700- Toggle Auto Cleanup|r\n"
-            cmds = cmds .. RC() .. "/alcui|r (or /alctoggleui) |cFFD700- Toggle Memory UI visibility|r\n"
-            cmds = cmds .. RC() .. "/alclock|r (or /alcuilock) |cFFD700- Lock/Unlock UI dragging|r\n"
-            cmds = cmds .. RC() .. "/alcreset|r (or /alcuireset) |cFFD700- Reset Memory UI position|r\n"
-            cmds = cmds .. RC() .. "/alccsa|r (or /alctogglecsa) |cFFD700- Toggle Screen Announcements|r\n"
+            cmds = cmds .. "|cFFFFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n"
+            cmds = cmds .. "|cFFFFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n"
+            cmds = cmds .. "|cFFFFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n"
+            cmds = cmds .. "|cFFFFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n"
+            cmds = cmds .. "|cFFFFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n"
             if not IsConsoleUI() then
-                cmds = cmds .. RC() .. "/alclogs|r (or /alcchatlogs) |cFFD700- Toggle Chat Logs|r\n"
+                cmds = cmds .. "|cFFFFFF/alclogs|r (or |cFF0000/alcchatlogs|r) |cFFD700- Toggle Chat Logs|r\n"
             end
-            cmds = cmds .. RC() .. "/alcclean|r (or /alccleanup) |cFFD700- Force a manual Lua memory cleanup|r"
+            cmds = cmds .. "|cFFFFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force a manual Lua memory cleanup|r"
             
             if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r\n" .. cmds) end
             return
