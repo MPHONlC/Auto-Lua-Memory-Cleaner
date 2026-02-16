@@ -584,6 +584,71 @@ function ALC:Init(eventCode, addOnName)
             end
         end)
     end
+
+    -- Slash Commands
+    SLASH_COMMANDS["/alc"] = function(extra)
+        local cmd = extra:lower()
+        if cmd == "" then
+            local cmds = "|c00FF00Available ALC Commands:|r\n"
+            cmds = cmds .. "|c00FFFF/alcenable|r - Toggle Auto Cleanup\n"
+            cmds = cmds .. "|c00FFFF/alcui|r - Toggle Memory UI visibility\n"
+            cmds = cmds .. "|c00FFFF/alclock|r - Lock/Unlock UI dragging\n"
+            cmds = cmds .. "|c00FFFF/alcuireset|r - Reset Memory UI position\n"
+            cmds = cmds .. "|c00FFFF/alccsa|r - Toggle Screen Announcements\n"
+            if not IsConsoleUI() then
+                cmds = cmds .. "|c00FFFF/alcchatlogs|r - Toggle Chat Logs\n"
+            end
+            cmds = cmds .. "|c00FFFF/alccleanup|r - Force a manual Lua memory cleanup"
+            
+            if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage(cmds) end
+            return
+        end
+    end
+
+    SLASH_COMMANDS["/alcenable"] = function()
+        self.settings.enabled = not self.settings.enabled
+        local status = self.settings.enabled and "|c00FF00ON|r" or "|cFF0000OFF|r"
+        if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Auto Cleanup: " .. status) end
+    end
+
+    SLASH_COMMANDS["/alcui"] = function()
+        self.settings.showUI = not self.settings.showUI
+        self:UpdateUIScenes()
+        local status = self.settings.showUI and "|c00FF00VISIBLE|r" or "|cFF0000HIDDEN|r"
+        if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Memory UI: " .. status) end
+    end
+
+    SLASH_COMMANDS["/alclock"] = function()
+        self.settings.uiLocked = not self.settings.uiLocked
+        if self.uiWindow then self.uiWindow:SetMovable(not self.settings.uiLocked) end
+        local status = self.settings.uiLocked and "|cFF0000LOCKED|r" or "|c00FF00UNLOCKED|r"
+        if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r UI Position: " .. status) end
+    end
+
+    SLASH_COMMANDS["/alcuireset"] = function()
+        self.settings.uiX = nil
+        self.settings.uiY = nil
+        self:UpdateUIAnchor()
+        if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r UI Position Reset.") end
+    end
+
+    SLASH_COMMANDS["/alccsa"] = function()
+        self.settings.csaEnabled = not self.settings.csaEnabled
+        local status = self.settings.csaEnabled and "|c00FF00ON|r" or "|cFF0000OFF|r"
+        if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Screen Announcements: " .. status) end
+    end
+
+    if not IsConsoleUI() then
+        SLASH_COMMANDS["/alcchatlogs"] = function()
+            self.settings.logEnabled = not self.settings.logEnabled
+            local status = self.settings.logEnabled and "|c00FF00ON|r" or "|cFF0000OFF|r"
+            if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Chat Logs: " .. status) end
+        end
+    end
+
+    SLASH_COMMANDS["/alccleanup"] = function()
+        self:RunCleanup()
+    end
 end
 
 EVENT_MANAGER:RegisterForEvent(ALC.name, EVENT_ADD_ON_LOADED, function(...) ALC:Init(...) end)
