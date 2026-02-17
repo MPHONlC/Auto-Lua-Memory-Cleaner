@@ -39,3 +39,9 @@ While this addon is highly effective at clearing out unused background garbage, 
 If you encounter any issues, please submit a report here or on ESOUI.
 
 </div>
+
+## Support
+
+If this project has been useful to you, consider supporting its development:
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/aph0nlc)
