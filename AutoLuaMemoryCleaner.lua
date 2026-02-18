@@ -58,7 +58,7 @@ function ALC:FormatMemory(valueMB)
     end
 end
 
--- CSA
+-- CSA split
 function ALC:SafeCSA(text)
     if not self.settings.csaEnabled or not CENTER_SCREEN_ANNOUNCE then return end
     
