@@ -47,6 +47,44 @@ local function GetLAMVersion()
     return false, 0
 end
 
+-- Size format
+function ALC:FormatMemory(valueMB)
+    if valueMB >= 1048576 then
+        return string.format("%.2f TB", valueMB / 1048576)
+    elseif valueMB >= 1024 then
+        return string.format("%.2f GB", valueMB / 1024)
+    else
+        return string.format("%.2f MB", valueMB)
+    end
+end
+
+-- CSA
+function ALC:SafeCSA(text)
+    if not self.settings.csaEnabled or not CENTER_SCREEN_ANNOUNCE then return end
+    
+    local limit = 90
+    if string.len(text) <= limit then
+        local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
+        params:SetText(text); params:SetLifespanMS(4000)
+        CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
+    else
+        -- Split message
+        local part1 = string.sub(text, 1, limit) .. "..."
+        local part2 = "..." .. string.sub(text, limit + 1)
+        
+        local params1 = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
+        params1:SetText(part1); params1:SetLifespanMS(4000)
+        CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params1)
+        
+        -- Delay
+        zo_callLater(function() 
+            local params2 = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
+            params2:SetText(part2); params2:SetLifespanMS(4000)
+            CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params2)
+        end, 1500)
+    end
+end
+
 -- Live statistics
 function ALC:GetStatsText()
     local currentMB = IsConsoleUI() and GetTotalUserAddOnMemoryPoolUsageMB() or (collectgarbage("count") / 1024)
@@ -71,11 +109,11 @@ function ALC:GetStatsText()
     local lamText = lamVersion > 0 and tostring(lamVersion) or "Not Installed"
 
     return string.format(
-        "Installed Since: %s\nVersion History: %s\nLibAddonMenu-2.0 Version: %s\nMax Lua Memory: %s\nCurrent Global Memory: %.2f MB %s\n\n|c00FF00[Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %.2f MB\n\n|cFFA500[Previous Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %.2f MB\n\n|c00FFFF[Lifetime Statistics]|r\nTotal Cleanups: %d\nTotal Memory Freed: %.2f MB", 
-        installDate, vHistoryText, lamText, luaLimitTxt, currentMB, memWarning,
-        self.sessionCleanups, self.sessionMBFreed, 
-        self.settings.prevSessionCleanups or 0, self.settings.prevSessionMBFreed or 0,
-        self.settings.totalCleanups or 0, self.settings.totalMBFreed or 0
+        "Installed Since: %s\nVersion History: %s\nLibAddonMenu-2.0 Version: %s\nMax Lua Memory: %s\nCurrent Global Memory: %s %s\n\n|c00FF00[Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %s\n\n|cFFA500[Previous Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %s\n\n|c00FFFF[Lifetime Statistics]|r\nTotal Cleanups: %d\nTotal Memory Freed: %s", 
+        installDate, vHistoryText, lamText, luaLimitTxt, self:FormatMemory(currentMB), memWarning,
+        self.sessionCleanups, self:FormatMemory(self.sessionMBFreed), 
+        self.settings.prevSessionCleanups or 0, self:FormatMemory(self.settings.prevSessionMBFreed or 0),
+        self.settings.totalCleanups or 0, self:FormatMemory(self.settings.totalMBFreed or 0)
     )
 end
 
@@ -113,8 +151,8 @@ function ALC:RunCleanup()
         local freed = before - after
         self.memState = 0
         
-        -- Update session and lifetime statistics if memory was actually freed
-        if freed > 0 then
+        -- ignore zero freed
+        if freed > 0.01 then
             self.sessionCleanups = self.sessionCleanups + 1
             self.sessionMBFreed = self.sessionMBFreed + freed
             
@@ -135,52 +173,54 @@ function ALC:RunCleanup()
             end
         end
         
-        local msg = string.format("Memory Freed %.2f MB", freed)
+        local msg = string.format("Memory Freed %s", self:FormatMemory(freed))
         
         if self.settings.logEnabled and CHAT_SYSTEM then
             CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r " .. msg)
         end
         
-        if self.settings.csaEnabled and CENTER_SCREEN_ANNOUNCE then
-            local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
-            params:SetText("|c00FFFF" .. msg .. "|r")
-            params:SetLifespanMS(4000)
-            CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
-        end
-
+        self:SafeCSA("|c00FFFF" .. msg .. "|r")
         self:UpdateUI()
     end, 500)
 end
 
 function ALC:TriggerMemoryCheck(checkType, delay)
     if not self.settings.enabled then return end
-    if self.memState == 1 or self.isMemCheckQueued then return end -- Prevent overlapping checks if a cleanup is already happening
-    -- Check if memory is above platform threshold. If not, IGNORE.
+    if self.memState == 1 or self.isMemCheckQueued then return end -- Prevent overlapping checks
+    
     local currentMB = IsConsoleUI() and GetTotalUserAddOnMemoryPoolUsageMB() or (collectgarbage("count") / 1024)
     local threshold = IsConsoleUI() and self.settings.thresholdConsole or self.settings.thresholdPC 
 
     if currentMB >= threshold then
         local inCombat = IsUnitInCombat and IsUnitInCombat("player")
-        if inCombat or IsUnitDead("player") then return end
+        if inCombat or IsUnitDead("player") then 
+            ALC:UpdateUI() -- Force update to show combat status
+            return 
+        end
 
         self.isMemCheckQueued = true -- Lock the queue
         -- Start delay
         zo_callLater(function()
             self.isMemCheckQueued = false
             if self.memState == 1 then return end
-            -- check state after delay
+            
             local stillInCombat = IsUnitInCombat and IsUnitInCombat("player")
-            if stillInCombat or IsUnitDead("player") then return end
+            if stillInCombat or IsUnitDead("player") then 
+                ALC:UpdateUI() -- Force update
+                return 
+            end
+            
             -- Menu Intent Check
             if checkType == "Menu" then
                 local inMenu = SCENE_MANAGER and not (SCENE_MANAGER:IsShowing("hud") or SCENE_MANAGER:IsShowing("hudui"))
-                if not inMenu then return end -- Exited before 2s ran out, IGNORE
+                if not inMenu then return end 
             end
+            
             -- Memory Check & Execution
             local recheckMB = IsConsoleUI() and GetTotalUserAddOnMemoryPoolUsageMB() or (collectgarbage("count") / 1024)
             if recheckMB >= threshold then
                 self:RunCleanup()
-                -- Fallback timer
+                
                 EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
                 EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_Fallback", self.settings.fallbackDelayS * 1000, function() 
                     ALC:TriggerMemoryCheck("Fallback", 0) 
@@ -188,7 +228,6 @@ function ALC:TriggerMemoryCheck(checkType, delay)
             end
         end, delay)
     else
-        -- Go Dormant and kill Timers
         EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
         self.memState = 0
     end
@@ -200,10 +239,8 @@ function ALC:UpdateUIAnchor()
     self.uiWindow:ClearAnchors()
     
     if self.settings.uiX and self.settings.uiY then
-        -- UI drag logic
         self.uiWindow:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, self.settings.uiX, self.settings.uiY)
     else
-        -- No saved position, snap to the left side of the compass
         local xOffset = 0
         if _G["PP"] then xOffset = 0.5 end
         
@@ -226,16 +263,20 @@ function ALC:UpdateUI()
         color = "|cFFA500"
     end
     
-    self.uiLabel:SetText(string.format("|c00FFFF[ALC]|r Memory Usage: %s%.2f MB|r", color, currentMB))
+    -- UI Combat Status
+    local title = "|c00FFFF[ALC]|r"
+    if IsUnitInCombat("player") then
+        title = "|cFF0000[ALC] (Combat)|r"
+    end
+    
+    self.uiLabel:SetText(string.format("%s Memory: %s%s|r", title, color, self:FormatMemory(currentMB)))
     self.uiWindow:SetDimensions(self.uiLabel:GetTextWidth() + 20, self.uiLabel:GetTextHeight() + 10)
 end
 
 function ALC:UpdateUIScenes()
     if not self.hudFragment then return end
     
-    -- Scene Manager, where UI can be seen
     local scenes = {"hud", "hudui", "gamepad_hud"}
-    
     for _, name in ipairs(scenes) do
         local scene = SCENE_MANAGER:GetScene(name)
         if scene then
@@ -257,7 +298,7 @@ function ALC:CreateUI()
     ui:SetClampedToScreen(true)
     ui:SetMouseEnabled(true)
     ui:SetMovable(not self.settings.uiLocked)
-    ui:SetHidden(true) -- Default to hidden, Scene Manager will reveal it
+    ui:SetHidden(true) 
     
     self.uiWindow = ui
     self:UpdateUIAnchor()
@@ -286,7 +327,6 @@ function ALC:CreateUI()
     
     self.uiLabel = label
     
-    -- UI update
     local lastUpdate = 0
     ui:SetHandler("OnUpdate", function(control, time)
         if not ALC.settings.showUI then return end
@@ -301,7 +341,6 @@ end
 
 -- LibAddonMenu UI Settings
 function ALC:BuildMenu()
-    -- Check LAM version and prevent menu from loading if LAM is outdated
     local isLAMInstalled, lamVersion = GetLAMVersion()
     if not isLAMInstalled then return end
 
@@ -309,11 +348,7 @@ function ALC:BuildMenu()
         zo_callLater(function()
             local msg = string.format("|cFFFF00Warning: LibAddonMenu is outdated (v%d). Update to v%d+ for ALC menu.|r", lamVersion, REQUIRED_LAM_VERSION)
             if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|cFF0000[ALC]|r " .. msg) end
-            if CENTER_SCREEN_ANNOUNCE then
-                local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
-                params:SetText(msg); params:SetLifespanMS(6000)
-                CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
-            end
+            ALC:SafeCSA(msg)
         end, 4000)
         return
     end
@@ -332,8 +367,8 @@ function ALC:BuildMenu()
     
     local optionsData = {}
     
-    local consoleCmds = "|cFFFFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n\n|cFFFFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n\n|cFFFFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n\n|cFFFFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n\n|cFFFFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n\n|cFFFFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force manual Lua memory cleanup|r"
-    local pcCmdsText = "|cFFFFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n|cFFFFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n|cFFFFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n|cFFFFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n|cFFFFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n|cFFFFFF/alclogs|r (or |cFF0000/alcchatlogs|r) |cFFD700- Toggle Chat Logs|r\n|cFFFFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force a manual Lua memory cleanup|r"
+    local consoleCmds = "|c00FFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n\n|c00FFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n\n|c00FFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n\n|c00FFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n\n|c00FFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n\n|c00FFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force manual Lua memory cleanup|r"
+    local pcCmdsText = "|c00FFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n|c00FFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n|c00FFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n|c00FFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n|c00FFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n|c00FFFF/alclogs|r (or |cFF0000/alcchatlogs|r) |cFFD700- Toggle Chat Logs|r\n|c00FFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force a manual Lua memory cleanup|r"
 
     if IsConsoleUI() then
         table.insert(optionsData, { type = "button", name = "|c00FF00ALC LIVE STATS|r", tooltip = function() return ALC:GetStatsText() end, func = function() end, width = "full" })
@@ -587,7 +622,7 @@ function ALC:Init(eventCode, addOnName)
         SCENE_MANAGER:RegisterCallback("SceneStateChanged", function(scene, oldState, newState)
             if newState == SCENE_SHOWN then
                 if scene.name ~= "hud" and scene.name ~= "hudui" then
-                    self:TriggerMemoryCheck("Menu", 2000)
+                    self:TriggerMemoryCheck("Menu", 6000) -- Updated to 6 seconds
                 end
             end
         end)
@@ -598,15 +633,15 @@ function ALC:Init(eventCode, addOnName)
         local cmd = extra:lower()
         if cmd == "" then
             local cmds = "|c00FF00Available ALC Commands:|r\n"
-            cmds = cmds .. "|cFFFFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n"
-            cmds = cmds .. "|cFFFFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n"
-            cmds = cmds .. "|cFFFFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n"
-            cmds = cmds .. "|cFFFFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n"
-            cmds = cmds .. "|cFFFFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n"
+            cmds = cmds .. "|c00FFFF/alcon|r (or |cFF0000/alcenable|r) |cFFD700- Toggle Auto Cleanup|r\n"
+            cmds = cmds .. "|c00FFFF/alcui|r (or |cFF0000/alctoggleui|r) |cFFD700- Toggle Memory UI visibility|r\n"
+            cmds = cmds .. "|c00FFFF/alclock|r (or |cFF0000/alcuilock|r) |cFFD700- Lock/Unlock UI dragging|r\n"
+            cmds = cmds .. "|c00FFFF/alcreset|r (or |cFF0000/alcuireset|r) |cFFD700- Reset Memory UI position|r\n"
+            cmds = cmds .. "|c00FFFF/alccsa|r (or |cFF0000/alctogglecsa|r) |cFFD700- Toggle Screen Announcements|r\n"
             if not IsConsoleUI() then
-                cmds = cmds .. "|cFFFFFF/alclogs|r (or |cFF0000/alcchatlogs|r) |cFFD700- Toggle Chat Logs|r\n"
+                cmds = cmds .. "|c00FFFF/alclogs|r (or |cFF0000/alcchatlogs|r) |cFFD700- Toggle Chat Logs|r\n"
             end
-            cmds = cmds .. "|cFFFFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force a manual Lua memory cleanup|r"
+            cmds = cmds .. "|c00FFFF/alcclean|r (or |cFF0000/alccleanup|r) |cFFD700- Force a manual Lua memory cleanup|r"
             
             if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r\n" .. cmds) end
             return
