@@ -59,29 +59,84 @@ function ALC:FormatMemory(valueMB)
 end
 
 -- CSA split
-function ALC:SafeCSA(text)
+function ALC:SafeCSA(text, customLimit)
     if not self.settings.csaEnabled or not CENTER_SCREEN_ANNOUNCE then return end
+
+    -- Use the provided limit, or default to 70 if none is provided
+    local limit = customLimit or 70 
     
-    local limit = 90
     if string.len(text) <= limit then
         local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
-        params:SetText(text); params:SetLifespanMS(4000)
+        params:SetText(text)
+        params:SetLifespanMS(4000)
         CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
-    else
-        -- Split message
-        local part1 = string.sub(text, 1, limit) .. "..."
-        local part2 = "..." .. string.sub(text, limit + 1)
+        return
+    end
+
+    local chunks = {}
+    local currentChunk = ""
+
+    -- Safely split text by words without cutting them in half
+    for word in string.gmatch(text, "%S+") do
+        local testStr = (currentChunk == "") and word or (currentChunk .. " " .. word)
         
-        local params1 = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
-        params1:SetText(part1); params1:SetLifespanMS(4000)
-        CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params1)
+        if string.len(testStr) > limit and currentChunk ~= "" then
+            table.insert(chunks, currentChunk)
+            currentChunk = word
+        else
+            currentChunk = testStr
+        end
+    end
+    if currentChunk ~= "" then table.insert(chunks, currentChunk) end
+
+    local delayMS = 0
+    local activeColor = ""
+
+    for i, chunk in ipairs(chunks) do
+        local finalMsg = chunk
         
-        -- Delay
-        zo_callLater(function() 
-            local params2 = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
-            params2:SetText(part2); params2:SetLifespanMS(4000)
-            CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params2)
-        end, 1500)
+        -- Add carryover colors and ellipses
+        if i > 1 then finalMsg = activeColor .. "..." .. finalMsg end
+        if i < #chunks then finalMsg = finalMsg .. "..." end
+
+        -- Scan this chunk from left to right to track the last used color
+        local idx = 1
+        while idx <= string.len(chunk) do
+            local cTag = string.match(chunk, "^|c%x%x%x%x%x%x", idx)
+            if cTag then
+                activeColor = cTag
+                idx = idx + 8
+            elseif string.sub(chunk, idx, idx + 1) == "|r" then
+                activeColor = ""
+                idx = idx + 2
+            else
+                idx = idx + 1
+            end
+        end
+
+        -- Close any unclosed tags to prevent UI bleed
+        local opens = 0
+        for _ in string.gmatch(finalMsg, "|c%x%x%x%x%x%x") do opens = opens + 1 end
+        local closes = 0
+        for _ in string.gmatch(finalMsg, "|r") do closes = closes + 1 end
+        if opens > closes then finalMsg = finalMsg .. "|r" end
+
+        -- Dispatch with sequenced timing
+        if delayMS > 0 then
+            zo_callLater(function() 
+                local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
+                params:SetText(finalMsg)
+                params:SetLifespanMS(4000)
+                CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
+            end, delayMS)
+        else
+            local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
+            params:SetText(finalMsg)
+            params:SetLifespanMS(4000)
+            CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
+        end
+
+        delayMS = delayMS + 1500
     end
 end
 
@@ -179,7 +234,7 @@ function ALC:RunCleanup()
             CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r " .. msg)
         end
         
-        self:SafeCSA("|c00FFFF" .. msg .. "|r")
+        self:SafeCSA("|c00FFFF" .. msg .. "|r", 90)
         self:UpdateUI()
     end, 500)
 end
@@ -450,6 +505,22 @@ function ALC:BuildMenu()
         getFunc = function() return ALC.settings.csaEnabled end,
         setFunc = function(value) ALC.settings.csaEnabled = value end
     })
+    
+    -- CSA Test Button
+    if GetDisplayName() == "@APHONlC" then
+        table.insert(optionsData, {
+            type = "button",
+            name = "Test Screen Announcements",
+            tooltip = "Triggers a sequence of all CSA messages to verify formatting, colors, and the long text split logic.",
+            func = function()
+                zo_callLater(function()
+                    local warningMsg = "|cFFFF00[ALC] Warning: LibAddonMenu is outdated. Update to v41+ for ALC menu.|r"
+                    ALC:SafeCSA(warningMsg, 90)
+                end, 3000)
+            end,
+            width = "full"
+        })
+    end
     
     table.insert(optionsData, { type = "divider" })
     
