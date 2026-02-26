@@ -514,7 +514,7 @@ function ALC:BuildMenu()
             tooltip = "Triggers a sequence of all CSA messages to verify formatting, colors, and the long text split logic.",
             func = function()
                 zo_callLater(function()
-                    local warningMsg = "|cFFFF00[ALC] Warning: LibAddonMenu is outdated. Update to v41+ for ALC menu.|r"
+                    local warningMsg = "|cFFFF00[ALC] LibAddonMenu is outdated. Update to v41+ for ALC menu.|r"
                     ALC:SafeCSA(warningMsg, 90)
                 end, 3000)
             end,
