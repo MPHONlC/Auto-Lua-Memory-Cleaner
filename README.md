@@ -1,4 +1,7 @@
 # [**Auto Lua Memory Cleaner**](https://www.esoui.com/downloads/info4388-AutoLuaMemoryCleaner.html)
+[![ESOUI](https://img.shields.io/badge/PC-ESOUI-orange.svg?style=for-the-badge)](https://www.esoui.com/downloads/fileinfo.php?id=4388)
+[![Bethesda Mods](https://img.shields.io/badge/Console-Bethesda.net-black.svg?style=for-the-badge&logo=bethesda&logoColor=white)](https://mods.bethesda.net/en/elderscrollsonline/details/9926b8d4-d4ca-4215-8790-013c0b1630c0/AUTO_LUA_MEMORY_CLEANER)
+
 A lightweight, event driven background memory cleaner designed to eliminate performance stuttering with 0% idle CPU usage.
 
 ## Optional Dependencies
@@ -9,6 +12,12 @@ This addon requires the following optional library to access the settings GUI me
 
 ## Why use this over other memory cleaners? 
 Other memory cleaners uses a constant "OnUpdate" timers that pings the game every few seconds to check your memory, the timer loops endlessly from the moment you log in, they do often pauses the cleanup, but the polling loop keeps firing in the background even during fights, they also often calculate memory strings even when the UI is hidden or closed, they are built before console APIs existed, they only track "collectgarbage", ignoring console UI limits, all of which unnecessarily wastes CPU cycles. Auto Lua Memory Cleaner uses a **dormant, event driven trigger**. It stays completely asleep (using 0% CPU) and only wakes up to check your memory during natural breaks while playing, such as right after you exit combat or close a menu.
+
+<p align="center">
+  <img src="https://cdn-eso.mmoui.com/preview/pvw15216.png" alt="Permanent Memento UI 1" />
+  <br>
+  <img src="https://cdn-eso.mmoui.com/preview/pvw15318.png" alt="Permanent Memento UI 2" />
+</p>
 
 ## Features
 * **Zero Idle Footprint:** Event trigger ensures the addon only runs checks during loading screens, exiting combat, or closing a menu.
