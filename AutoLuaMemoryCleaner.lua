@@ -3,7 +3,7 @@
 -----------------------------------------------------------
 local ALC = {
     name = "AutoLuaMemoryCleaner",
-    version = "0.0.5",
+    version = "0.0.6",
     -- Default settings
     defaults = {
         enabled = true,
@@ -197,11 +197,14 @@ function ALC:MigrateData()
 end
 
 -- Memory Cleanup
-function ALC:RunCleanup()
+function ALC:RunCleanup(isEmergency)
     self.memState = 1
     zo_callLater(function()
         local before = collectgarbage("count") / 1024
         collectgarbage("collect")
+            if isEmergency then 
+            collectgarbage("collect") 
+        end
         local after = collectgarbage("count") / 1024
         local freed = before - after
         self.memState = 0
@@ -687,6 +690,10 @@ function ALC:Init(eventCode, addOnName)
     
     EVENT_MANAGER:RegisterForEvent(self.name .. "_CombatState", EVENT_PLAYER_COMBAT_STATE, function(eventCode, inCombat)
         if not inCombat then self:TriggerMemoryCheck("CombatEnd", 3000) end
+    end)
+    
+    EVENT_MANAGER:RegisterForEvent(self.name .. "_LowMem", EVENT_LUA_LOW_MEMORY, function() 
+    self:RunCleanup(true) 
     end)
     
     if SCENE_MANAGER then
