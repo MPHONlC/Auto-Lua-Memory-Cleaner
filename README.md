@@ -39,22 +39,14 @@ Other memory cleaners uses a constant "OnUpdate" timers that pings the game ever
 
 | Command | Description |
 | :--- | :--- |
-| `/alc` | Displays current memory usage stats and session totals. |
-| `/alcclean` | Triggers an immediate manual garbage collection. |
-| `/alcui` | Toggles the live memory tracking monitor window. |
-| `/alctoggleui` | Alias for `/alcui`. |
-| `/alclock` | Locks or unlocks the monitor window for dragging. |
-| `/alcuilock` | Alias for `/alclock`. |
-| `/alcreset` | Resets the monitor window position to default. |
-| `/alcuireset` | Alias for `/alcreset`. |
-| `/alccsa` | Toggles Center Screen Announcements (CSA) for cleanups. |
-| `/alctogglecsa` | Alias for `/alccsa`. |
-| `/alclogs` | (PC Only) Toggles detailed chat logging for memory cleanups. |
-| `/alcthresholdpc <MB>` | Sets the memory threshold for PC (e.g., `/alcthresholdpc 500`). |
-| `/alcthresholdconsole <MB>` | Sets the memory threshold for Console (e.g., `/alcthresholdconsole 90`). |
-| `/alctogglepc` | Toggles the automatic cleaner on for PC environments. |
-| `/alctoggleconsole` | Toggles the automatic cleaner on for Console environments. |
-| `/alcfallback <seconds>` | Sets the fallback timer (e.g., `/alcfallback 600` for 10 mins). |
+| `/alc` | Displays commands list (Alias: `/autoluaclean`) |
+| `/alcon` | Toggle Auto Cleanup (Alias: `/alcenable`) |
+| `/alcui` | Toggle Memory UI visibility (Alias: `/alctoggleui`) |
+| `/alclock` | Lock/Unlock UI dragging (Alias: `/alcuilock`) |
+| `/alcreset` | Reset Memory UI position (Alias: `/alcuireset`) |
+| `/alccsa` | Toggle Screen Announcements (Alias: `/alctogglecsa`) |
+| `/alcclean` | Force manual Lua memory cleanup (Alias: `/alccleanup`) |
+| `/alclogs` | **(PC Only)** Toggle Chat Logs (Alias: `/alcchatlogs`) |
 
 <div align="center">
 
