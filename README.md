@@ -1,9 +1,11 @@
 # [**Auto Lua Memory Cleaner**](https://www.esoui.com/downloads/info4388-AutoLuaMemoryCleaner.html)
 A lightweight, event driven background memory cleaner designed to eliminate performance stuttering with 0% idle CPU usage.
 
-## Dependencies
-This addon requires the following library to access the settings menu:
+## Optional Dependencies
+This addon requires the following optional library to access the settings GUI menu:
 * [LibAddonMenu-2.0](https://www.esoui.com/downloads/info7-LibAddonMenu-2.0.html)
+
+**Without the Dependencies:** you can still run the addon entirely independent, and control its settings via built-in slash commands as a standalone control.
 
 ## Why use this over other memory cleaners? 
 Other memory cleaners uses a constant "OnUpdate" timers that pings the game every few seconds to check your memory, the timer loops endlessly from the moment you log in, they do often pauses the cleanup, but the polling loop keeps firing in the background even during fights, they also often calculate memory strings even when the UI is hidden or closed, they are built before console APIs existed, they only track "collectgarbage", ignoring console UI limits, all of which unnecessarily wastes CPU cycles. Auto Lua Memory Cleaner uses a **dormant, event driven trigger**. It stays completely asleep (using 0% CPU) and only wakes up to check your memory during natural breaks while playing, such as right after you exit combat or close a menu.
@@ -23,6 +25,27 @@ Other memory cleaners uses a constant "OnUpdate" timers that pings the game ever
 * **FORCE MANUAL CLEANUP:** A button in the settings to instantly manually wipe unused Lua memory.
 
 ---
+
+### Slash Commands
+
+| Command | Description |
+| :--- | :--- |
+| `/alc` | Displays current memory usage stats and session totals. |
+| `/alcclean` | Triggers an immediate manual garbage collection. |
+| `/alcui` | Toggles the live memory tracking monitor window. |
+| `/alctoggleui` | Alias for `/alcui`. |
+| `/alclock` | Locks or unlocks the monitor window for dragging. |
+| `/alcuilock` | Alias for `/alclock`. |
+| `/alcreset` | Resets the monitor window position to default. |
+| `/alcuireset` | Alias for `/alcreset`. |
+| `/alccsa` | Toggles Center Screen Announcements (CSA) for cleanups. |
+| `/alctogglecsa` | Alias for `/alccsa`. |
+| `/alclogs` | (PC Only) Toggles detailed chat logging for memory cleanups. |
+| `/alcthresholdpc <MB>` | Sets the memory threshold for PC (e.g., `/alcthresholdpc 500`). |
+| `/alcthresholdconsole <MB>` | Sets the memory threshold for Console (e.g., `/alcthresholdconsole 90`). |
+| `/alctogglepc` | Toggles the automatic cleaner on for PC environments. |
+| `/alctoggleconsole` | Toggles the automatic cleaner on for Console environments. |
+| `/alcfallback <seconds>` | Sets the fallback timer (e.g., `/alcfallback 600` for 10 mins). |
 
 <div align="center">
 
