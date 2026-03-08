@@ -61,7 +61,7 @@ If your total Lua memory usage stays below **300 MB** and you run on an SSD, the
 
 * **Power Users:** Players with dozens of heavy addons pushing memory limits.
 * **Console Players:** Players already pushing to the **100 MB** hardware cap.
-* **Performance Freaks:** Anyone wanting manual control over *when* memory is cleared.
+* **Performance Freaks/Low End Users:** Anyone wanting manual control over *when* memory is cleared.
 
 </div>
 
