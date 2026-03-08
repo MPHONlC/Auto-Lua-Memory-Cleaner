@@ -89,7 +89,7 @@ If you use, redistribute, or modify this script in your own project, please use 
 * **License:** Apache License 2.0
 * **Original Source:** [Auto Lua Memory Cleaner](https://www.esoui.com/downloads/info4388-AutoLuaMemoryCleanerPCampConsole.html)
 
-### Check out my other addons/projects:
+### 📂 Check out my other addons/projects:
 * [Auto Lua Memory Cleaner](https://www.esoui.com/downloads/fileinfo.php?id=4388#info) - Intelligent, low footprint event based LUA memory garbage collection for PC and Console.
 * [Permanent Memento](https://www.esoui.com/downloads/fileinfo.php?id=4116#info) - Automate and loop or share your favorite mementos.
 * [Tamriel Trade Center, HarvestMap & ESO-Hub Auto-Updater (Linux, macOS, SteamDeck, & Windows)](https://www.esoui.com/downloads/fileinfo.php?id=3249#info) - Cross-platform data updater for Linux, macOS, SteamDeck, and Windows.
@@ -100,10 +100,10 @@ If you use, redistribute, or modify this script in your own project, please use 
 If you encounter any issues, please submit a report here:
 [ESOUI Bug Portal](https://www.esoui.com/portal.php?id=360&a=listbugs) | [GitHub Issue Tracker](https://github.com/MPHONlC/Auto-Lua-Memory-Cleaner/issues)
 
-</div>
-
 ## Support
 
 If this project has been useful to you, consider supporting its development:
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/aph0nlc)
+
+</div>
