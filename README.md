@@ -92,13 +92,13 @@ If you use, redistribute, or modify this script in your own project, please use 
 ### Check out my other addons/projects:
 * [Auto Lua Memory Cleaner](https://www.esoui.com/downloads/fileinfo.php?id=4388#info) - Intelligent, low footprint event based LUA memory garbage collection for PC and Console.
 * [Permanent Memento](https://www.esoui.com/downloads/fileinfo.php?id=4116#info) - Automate and loop or share your favorite mementos.
-* [TTC, HarvestMap & ESO-Hub Auto-Updater](https://www.esoui.com/downloads/fileinfo.php?id=3249#info) - Cross-platform data updater for Linux, macOS, SteamDeck, and Windows.
+* [Tamriel Trade Center, HarvestMap & ESO-Hub Auto-Updater (Linux, macOS, SteamDeck, & Windows)](https://www.esoui.com/downloads/fileinfo.php?id=3249#info) - Cross-platform data updater for Linux, macOS, SteamDeck, and Windows.
 
 <div align="center">
 
 ### 🐛 BUG REPORTS
 If you encounter any issues, please submit a report here:
-[ESOUI Bug Portal](https://www.esoui.com/portal.php?id=360&a=listbugs)
+[ESOUI Bug Portal](https://www.esoui.com/portal.php?id=360&a=listbugs) | [GitHub Issue Tracker](https://github.com/MPHONlC/Auto-Lua-Memory-Cleaner/issues)
 
 </div>
 
