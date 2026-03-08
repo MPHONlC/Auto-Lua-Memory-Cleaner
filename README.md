@@ -40,14 +40,14 @@ Auto Lua Memory Cleaner uses a **dormant, event-driven trigger**. It stays compl
 
 | Command | Description |
 | :--- | :--- |
-| `/alc` | Displays commands list (Alias: `/autoluaclean`) |
-| `/alcon` | Toggle Auto Cleanup (Alias: `/alcenable`) |
-| `/alcui` | Toggle Memory UI visibility (Alias: `/alctoggleui`) |
-| `/alcstats` | Toggle Saving Statistics |
-| `/alclock` | Lock/Unlock UI dragging (Alias: `/alcuilock`) |
-| `/alcreset` | Reset Memory UI position (Alias: `/alcuireset`) |
-| `/alccsa` | Toggle Screen Announcements (Alias: `/alctogglecsa`) |
-| `/alcclean` | Force manual Lua memory cleanup (Alias: `/alccleanup`) |
+| `/alc` | Displays the help menu and all available commands in chat (Alias: `/autoluaclean`) |
+| `/alcon` | Toggle the background Auto Cleanup system ON or OFF (Alias: `/alcenable`) |
+| `/alcui` | Toggle the visibility of the on-screen Memory Monitor (Alias: `/alctoggleui`) |
+| `/alclock` | Lock or Unlock the Memory Monitor UI to drag it around the screen (Alias: `/alcuilock`) |
+| `/alcreset` | Reset the Memory Monitor position and scale to default (Alias: `/alcuireset`) |
+| `/alcstats` | Toggle the tracking and saving of session/total memory statistics |
+| `/alccsa` | Toggle large Screen Announcements for memory cleanup events (Alias: `/alctogglecsa`) |
+| `/alcclean` | Immediately force a manual Lua memory garbage collection sweep (Alias: `/alccleanup`) |
 
 <div align="center">
 
