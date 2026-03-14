@@ -137,7 +137,7 @@ and had zero issues and crashes.
 
 [![LICENSE & USAGE](https://img.shields.io/badge/LICENSE%20%26%20USAGE-red?style=for-the-badge)](#license)
 
-Copyright (c) 2021-2026 @APHONlC. All rights reserved.
+Copyright (c) 2025-2026 @APHONlC. All rights reserved.
 
 **No Redistribution:** Please do not re-upload, mirror, or distribute this script to other platforms <sub>*(ESOUI, NexusMods, etc.)*</sub> without my explicit written permission.
 
