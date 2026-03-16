@@ -53,6 +53,7 @@ playing, such as right after you exit combat or while inside a menu.
 * <a id="feat-support"></a>[![PC & Console Support](https://img.shields.io/badge/PC%20%26%20Console%20Support-forestgreen?style=flat-square)](#feat-support) : Automatically adapts to your hardware specific memory rules. On PC, it helps you stay safely below the 512MB performance "soft limit" to prevent UI lag and stuttering. On Console, it safely monitors the strict 100MB hardware memory pool.
 * <a id="feat-sweep"></a>[![Double-Pass Engine Sweep](https://img.shields.io/badge/Double--Pass%20Engine%20Sweep-forestgreen?style=flat-square)](#feat-sweep) : A dual-pass garbage collection cycle to safely force execution of all pending __gc hooks and ensure orphaned weak tables are properly eradicated from the shared memory pool.
 * <a id="feat-memento"></a>[![PermMemento Integration](https://img.shields.io/badge/PermMemento%20Integration-forestgreen?style=flat-square)](#feat-memento) : Automatically detects [Permanent Memento](https://www.esoui.com/downloads/info4116-PermanentMemento.html) and disables its internal ALC cleaner.
+* <a id="feat-profiler"></a>[![Script Profiler Module](https://img.shields.io/badge/Script%20Profiler%20Module-forestgreen?style=flat-square)](#feat-profiler) : Built-in performance scanner that profiles all active addons over a 60-second window to identify which ones are causing the highest performance spikes.
 
 <a id="advanced-profiler"></a>
 <div align="center">
@@ -63,6 +64,7 @@ playing, such as right after you exit combat or while inside a menu.
 
 * <a id="feat-graph"></a>[![Dynamic Visual Graph](https://img.shields.io/badge/Dynamic%20Visual%20Graph-forestgreen?style=flat-square)](#feat-graph) : A detachable, btop-inspired module provides a real-time, 15-second window into your system performance.
 * <a id="feat-lite"></a>[![Lite Mode](https://img.shields.io/badge/Lite%20Mode-forestgreen?style=flat-square)](#feat-lite) : This toggle hides the visual graph, leaving you with a clean, text-only diagnostic overlay that provides all your vital data.
+* <a id="feat-diags"></a>[![Diagnostics](https://img.shields.io/badge/Diagnostics-forestgreen?style=flat-square)](#feat-diags) : Track real-time <kbd>Ping</kbd>, <kbd>FPS</kbd>, <kbd>Frametime</kbd> <sub>*(ms)*</sub>, and <kbd>KB/MB</kbd> memory creep.
 * <a id="feat-baseline"></a>[![Stable Baseline Math](https://img.shields.io/badge/Stable%20Baseline%20Math-forestgreen?style=flat-square)](#feat-baseline) : Analyzes your connection and framerate over 60-second intervals to accurately track true <kbd>FPS Loss</kbd> and <kbd>Ping Spikes</kbd>.
 * <a id="feat-session"></a>[![Previous Session Tracker](https://img.shields.io/badge/Previous%20Session%20Tracker-forestgreen?style=flat-square)](#feat-session) : A detachable UI that saves data upon logout or UI reload. Tracks <kbd>Peak</kbd>, <kbd>Average</kbd>, <kbd>Final</kbd>, and total <kbd>MemCleaned</kbd>.
 
@@ -94,10 +96,11 @@ playing, such as right after you exit combat or while inside a menu.
 * <kbd>/alcbar</kbd> : Toggle Memory UI Bar
 * <kbd>/alcgraph</kbd> • <kbd>/alcgraphlock</kbd> • <kbd>/alcgraphreset</kbd> : Graph controls
 * <kbd>/alclite</kbd> • <kbd>/alcdiags</kbd> : Diagnostics toggles
-* <kbd>/alcfps</kbd> • <kbd>/alcping</kbd> • <kbd>/alcgains</kbd> : Performance tracking
+* <kbd>/alcfps</kbd> • <kbd>/alcping</kbd> • <kbd>/alcframetime</kbd> • <kbd>/alcgains</kbd> : Performance tracking
 * <kbd>/alcsession</kbd> • <kbd>/alcsessionlock</kbd> • <kbd>/alcsessionreset</kbd> : Session UI
 * <kbd>/alcstatpeak</kbd> • <kbd>/alcstatavg</kbd> • <kbd>/alcstatfinal</kbd> • <kbd>/alcstatclean</kbd> : Log toggles
 * <kbd>/alcstats</kbd> : Toggle Saving Statistics
+* <kbd>/alcprofile</kbd> • <kbd>/alcself</kbd> • <kbd>/alclibs</kbd> • <kbd>/alcstart</kbd> : Profiler controls
 * <kbd>/alcclean</kbd> : Force manual Lua memory cleanup
 
 ---
@@ -137,7 +140,7 @@ and had zero issues and crashes.
 
 [![LICENSE & USAGE](https://img.shields.io/badge/LICENSE%20%26%20USAGE-red?style=for-the-badge)](#license)
 
-Copyright (c) 2025-2026 @APHONlC. All rights reserved.
+Copyright (c) 2021-2026 @APHONlC. All rights reserved.
 
 **No Redistribution:** Please do not re-upload, mirror, or distribute this script to other platforms <sub>*(ESOUI, NexusMods, etc.)*</sub> without my explicit written permission.
 
