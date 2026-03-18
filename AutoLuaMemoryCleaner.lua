@@ -3,13 +3,13 @@
 -- Copyright 2025-2026 @APHONlC
 -- Licensed under the Apache License, Version 2.0.
 
--- TESTED: 2026-03-16 | Release v0.0.7 | APIVersion: 101049 | LAM2 v41
-local is_release_build = true
+-- NOT TESTED: 2026-03-18 | Pre-Release v0.0.8 | APIVersion: 101049 | LAM2 v41
+local is_release_build = false
 local REQUIRED_LAM_VERSION = 41
 local stat_fps_total = 0
 local stat_fps_count = 0
 
-local AutoLuaCleaner = {
+local ALC = {
     name = "AutoLuaMemoryCleaner",
     version = "0.0.7",
     defaults = {
@@ -160,13 +160,13 @@ local function capitalizeAddonName(str)
     return (str:gsub("^%l", string.upper))
 end
 
-function AutoLuaCleaner:get_hybrid_memory_data()
+function ALC.get_hybrid_memory_data()
     if IsConsoleUI() then return GetTotalUserAddOnMemoryPoolUsageMB() end
     return collectgarbage("count") / 1024
 end
 
-function AutoLuaCleaner:get_alc_color(val, is_spike_mb)
-    local limit = IsConsoleUI() and self.settings.threshold_console or self.settings.threshold_pc
+function ALC.get_alc_color(val, is_spike_mb)
+    local limit = IsConsoleUI() and ALC.settings.threshold_console or ALC.settings.threshold_pc
     local pct = math.min((val / limit) * 100, 100)
     
     if is_spike_mb then
@@ -180,7 +180,7 @@ function AutoLuaCleaner:get_alc_color(val, is_spike_mb)
     end
 end
 
-function AutoLuaCleaner:get_gradient_color(block_mb, peak_mb)
+function ALC.get_gradient_color(block_mb, peak_mb)
     if IsConsoleUI() then
         if block_mb < 60 then return 0, 1, 0
         elseif block_mb < 100 then return 1, 0.65, 0
@@ -192,7 +192,7 @@ function AutoLuaCleaner:get_gradient_color(block_mb, peak_mb)
     end
 end
 
-function AutoLuaCleaner:get_main_label_color(mbCurrent, thresholdMB)
+function ALC.get_main_label_color(mbCurrent, thresholdMB)
     local pct = math.min((mbCurrent / thresholdMB) * 100, 100)
     local r, g, b
     if pct < 80 then r, g, b = 0, 1, 0
@@ -202,7 +202,7 @@ function AutoLuaCleaner:get_main_label_color(mbCurrent, thresholdMB)
     return string.format("%02x%02x%02x", r255, g255, b255), r, g, b
 end
 
-function AutoLuaCleaner:get_fixed_hard_cap_color(mbCurrent)
+function ALC.get_fixed_hard_cap_color(mbCurrent)
     if IsConsoleUI() then
         if mbCurrent >= 100 then return "|cFF0000"
         elseif mbCurrent >= 60 then return "|cFFA500"
@@ -214,18 +214,18 @@ function AutoLuaCleaner:get_fixed_hard_cap_color(mbCurrent)
     end
 end
 
-function AutoLuaCleaner:set_tag_alignment(l, y_off) 
+function ALC.set_tag_alignment(l, y_off) 
     l:ClearAnchors()
     l:SetAnchor(LEFT, graph_window, TOPLEFT, 305, y_off - 6) 
 end
 
-function AutoLuaCleaner:check_session_peak()
-    if not self.settings.is_stats_log_enabled then return end
-    local current_mb = self:get_hybrid_memory_data()
+function ALC.check_session_peak()
+    if not ALC.settings.is_stats_log_enabled then return end
+    local current_mb = ALC.get_hybrid_memory_data()
     if current_mb > session_peak_mb then session_peak_mb = current_mb end
 end
 
-function AutoLuaCleaner:get_settings_library()
+function ALC.get_settings_library()
     local addon_manager = GetAddOnManager()
     local lam_version = 0
     for i = 1, addon_manager:GetNumAddOns() do
@@ -238,82 +238,82 @@ function AutoLuaCleaner:get_settings_library()
     return "NONE", 0
 end
 
-function AutoLuaCleaner:format_memory(value_mb)
+function ALC.format_memory(value_mb)
     if value_mb >= 1048576 then return string.format("%.2f TB", value_mb / 1048576)
     elseif value_mb >= 1024 then return string.format("%.2f GB", value_mb / 1024)
     elseif value_mb >= 1 then return string.format("%.2f MB", value_mb)
     else return string.format("%d KB", math.floor(value_mb * 1024)) end
 end
 
-function AutoLuaCleaner:refresh_stats_tracker()
-    if not self.settings then return end
-    if self.settings.track_stats and not IsConsoleUI() then
-        EVENT_MANAGER:RegisterForUpdate(AutoLuaCleaner.name .. "_StatsUpdate", 1000, function()
+function ALC.refresh_stats_tracker()
+    if not ALC.settings then return end
+    if ALC.settings.track_stats and not IsConsoleUI() then
+        EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_StatsUpdate", 1000, function()
             local stats_ctrl = _G["ALC_StatsText"]
             if stats_ctrl and stats_ctrl.desc and not stats_ctrl:IsHidden() then
-                stats_ctrl.desc:SetText(AutoLuaCleaner:get_stats_text())
+                stats_ctrl.desc:SetText(ALC.get_stats_text())
             end
         end)
     else 
-        EVENT_MANAGER:UnregisterForUpdate(AutoLuaCleaner.name .. "_StatsUpdate") 
+        EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_StatsUpdate") 
     end
 end
 
-function AutoLuaCleaner:toggle_core_events()
-    if self.settings.is_enabled then
-        EVENT_MANAGER:RegisterForEvent(self.name .. "_CombatState", EVENT_PLAYER_COMBAT_STATE, 
+function ALC.toggle_core_events()
+    if ALC.settings.is_enabled then
+        EVENT_MANAGER:RegisterForEvent(ALC.name .. "_CombatState", EVENT_PLAYER_COMBAT_STATE, 
             function(event_code, in_combat) 
-                if not in_combat then self:trigger_memory_check("CombatEnd", 3000) end 
+                if not in_combat then ALC.trigger_memory_check("CombatEnd", 3000) end 
             end
         )
-        if SCENE_MANAGER and not self.is_scene_callback_registered then
-            self.scene_callback_fn = function(scene, old_state, new_state)
+        if SCENE_MANAGER and not ALC.is_scene_callback_registered then
+            ALC.scene_callback_fn = function(scene, old_state, new_state)
                 if new_state == SCENE_SHOWN then
                     if scene.name ~= "hud" and scene.name ~= "hudui" then 
-                        AutoLuaCleaner:trigger_memory_check("Menu", 6000) 
+                        ALC.trigger_memory_check("Menu", 6000) 
                     end
                 end
             end
-            SCENE_MANAGER:RegisterCallback("SceneStateChanged", self.scene_callback_fn)
-            self.is_scene_callback_registered = true
+            SCENE_MANAGER:RegisterCallback("SceneStateChanged", ALC.scene_callback_fn)
+            ALC.is_scene_callback_registered = true
         end
     else
-        EVENT_MANAGER:UnregisterForEvent(self.name .. "_CombatState", EVENT_PLAYER_COMBAT_STATE)
-        if SCENE_MANAGER and self.is_scene_callback_registered then
-            SCENE_MANAGER:UnregisterCallback("SceneStateChanged", self.scene_callback_fn)
-            self.is_scene_callback_registered = false
+        EVENT_MANAGER:UnregisterForEvent(ALC.name .. "_CombatState", EVENT_PLAYER_COMBAT_STATE)
+        if SCENE_MANAGER and ALC.is_scene_callback_registered then
+            SCENE_MANAGER:UnregisterCallback("SceneStateChanged", ALC.scene_callback_fn)
+            ALC.is_scene_callback_registered = false
         end
-        EVENT_MANAGER:UnregisterForUpdate(AutoLuaCleaner.name .. "_Fallback")
-        self.mem_state = 0
-        self.is_mem_check_queued = false
+        EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
+        ALC.mem_state = 0
+        ALC.is_mem_check_queued = false
     end
 end
 
-function AutoLuaCleaner:toggle_ui_update()
-    if not self.ui_window then return end
-    if self.settings.show_ui then
-        self.ui_window:SetHandler("OnUpdate", self.ui_update_fn)
-        self.ui_window:SetHidden(false)
+function ALC.toggle_ui_update()
+    if not ALC.ui_window then return end
+    if ALC.settings.show_ui then
+        ALC.ui_window:SetHandler("OnUpdate", ALC.ui_update_fn)
+        ALC.ui_window:SetHidden(false)
     else 
-        self.ui_window:SetHandler("OnUpdate", nil)
-        self.ui_window:SetHidden(true) 
+        ALC.ui_window:SetHandler("OnUpdate", nil)
+        ALC.ui_window:SetHidden(true) 
     end
     
-    if self.settings.is_graph_enabled and self.settings.show_ui then
-        if not graph_window then self:build_graph_ui() end
+    if ALC.settings.is_graph_enabled and ALC.settings.show_ui then
+        if not graph_window then ALC.build_graph_ui() end
         graph_window:SetHidden(false)
         EVENT_MANAGER:RegisterForUpdate("ALC_GraphTick", 250, function() 
-            AutoLuaCleaner:update_graph_visuals() 
+            ALC.update_graph_visuals() 
         end)
     else
         EVENT_MANAGER:UnregisterForUpdate("ALC_GraphTick")
         if graph_window then graph_window:SetHidden(true) end
     end
-    self:update_ui_scenes()
+    ALC.update_ui_scenes()
 end
 
-function AutoLuaCleaner:safe_csa(text, custom_limit)
-    if not self.settings.is_csa_enabled or not CENTER_SCREEN_ANNOUNCE then return end
+function ALC.safe_csa(text, custom_limit)
+    if not ALC.settings.is_csa_enabled or not CENTER_SCREEN_ANNOUNCE then return end
     local limit = custom_limit or 70 
     
     if string.len(text) <= limit then
@@ -386,12 +386,12 @@ function AutoLuaCleaner:safe_csa(text, custom_limit)
     end
 end
 
-function AutoLuaCleaner:get_stats_text()
-    if not self.settings.track_stats then 
+function ALC.get_stats_text()
+    if not ALC.settings.track_stats then 
         return "Tracking DISABLED. Enable 'Track Statistics' or type /alcstats to view live data." 
     end
     
-    local current_mb = self:get_hybrid_memory_data()
+    local current_mb = ALC.get_hybrid_memory_data()
     local mem_warning = ""
     local lua_limit_txt = ""
     
@@ -403,15 +403,15 @@ function AutoLuaCleaner:get_stats_text()
         mem_warning = current_mb > 400 and "|cFFA500(High Global Memory)|r" or "|c00FF00(Safe)|r" 
     end
     
-    local install_date = self.settings.install_date or "Unknown"
-    local v_history = table.concat(self.settings.version_history or {self.version}, ", ")
-    local lib_type, lam_version = self:get_settings_library()
+    local install_date = ALC.settings.install_date or "Unknown"
+    local v_history = table.concat(ALC.settings.version_history or {ALC.version}, ", ")
+    local lib_type, lam_version = ALC.get_settings_library()
     local lib_text = lib_type == "LAM2" 
         and string.format("LibAddonMenu (v%d)", lam_version) 
         or "Not Installed"
         
     local prof_txt = ""
-    local p_data = self.settings.saved_profiler_data
+    local p_data = ALC.settings.saved_profiler_data
     if p_data and p_data[1] and p_data[1].peak and p_data[1].peak > 0 then
         prof_txt = string.format(
             "\n\n|c00FFFF[Last Profiler Scan]|r\nPeak Lag: %.1fms by [%s]",
@@ -426,24 +426,24 @@ function AutoLuaCleaner:get_stats_text()
         "|c00FF00[Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %s\n\n" ..
         "|cFFA500[Previous Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %s\n\n" ..
         "|c00FFFF[Lifetime Statistics]|r\nTotal Cleanups: %d\nTotal Memory Freed: %s%s", 
-        install_date, v_history, lib_text, lua_limit_txt, self:format_memory(current_mb), 
-        mem_warning, self.session_cleanups, self:format_memory(self.session_mb_freed), 
-        self.settings.prev_session_cleanups or 0, 
-        self:format_memory(self.settings.prev_session_mb_freed or 0),
-        self.settings.total_cleanups or 0, 
-        self:format_memory(self.settings.total_mb_freed or 0),
+        install_date, v_history, lib_text, lua_limit_txt, ALC.format_memory(current_mb), 
+        mem_warning, ALC.session_cleanups, ALC.format_memory(ALC.session_mb_freed), 
+        ALC.settings.prev_session_cleanups or 0, 
+        ALC.format_memory(ALC.settings.prev_session_mb_freed or 0),
+        ALC.settings.total_cleanups or 0, 
+        ALC.format_memory(ALC.settings.total_mb_freed or 0),
         prof_txt
     )
 end
 
-function AutoLuaCleaner:migrate_data()
-    if self.settings then
-        self.settings.pmOverridden = nil
-        if not self.settings.is_migrated_007 then
-            self.settings.show_ui = false
-            self.settings.track_stats = false
-            self.settings.is_log_enabled = false
-            self.settings.is_migrated_007 = true
+function ALC.migrate_data()
+    if ALC.settings then
+        ALC.settings.pmOverridden = nil
+        if not ALC.settings.is_migrated_007 then
+            ALC.settings.show_ui = false
+            ALC.settings.track_stats = false
+            ALC.settings.is_log_enabled = false
+            ALC.settings.is_migrated_007 = true
         end
     end
     if _G["AutoLuaCleaner"] then
@@ -463,7 +463,7 @@ function AutoLuaCleaner:migrate_data()
     end
 end
 
-function AutoLuaCleaner:create_mover(target, label_text)
+function ALC.create_mover(target, label_text)
     local mover = WINDOW_MANAGER:CreateControl(nil, GuiRoot, CT_TOPLEVELCONTROL)
     mover:SetDimensions(target:GetWidth(), target:GetHeight())
     mover:SetAnchor(CENTER, target, CENTER, 0, 0)
@@ -499,28 +499,28 @@ function AutoLuaCleaner:create_mover(target, label_text)
     return mover
 end
 
-function AutoLuaCleaner:unlock_ui()
-    if self.is_ui_unlocked then return end
-    self.is_ui_unlocked = true
+function ALC.unlock_ui()
+    if ALC.is_ui_unlocked then return end
+    ALC.is_ui_unlocked = true
     
     if SCENE_MANAGER then SCENE_MANAGER:Show("hud") end
     
-    self.orig_pos = {
-        ui = {x = self.settings.ui_x, y = self.settings.ui_y},
-        graph = {x = self.settings.graph_x, y = self.settings.graph_y, detached = self.settings.is_graph_detached},
-        session = {x = self.settings.session_ui_x, y = self.settings.session_ui_y}
+    ALC.orig_pos = {
+        ui = {x = ALC.settings.ui_x, y = ALC.settings.ui_y},
+        graph = {x = ALC.settings.graph_x, y = ALC.settings.graph_y, detached = ALC.settings.is_graph_detached},
+        session = {x = ALC.settings.session_ui_x, y = ALC.settings.session_ui_y}
     }
     
-    if self.ui_window then self.ui_window:SetHidden(false) end
+    if ALC.ui_window then ALC.ui_window:SetHidden(false) end
     if graph_window then graph_window:SetHidden(false) end
     if session_window then session_window:SetHidden(false) end
     
-    self.movers = {}
-        if self.ui_window then table.insert(self.movers, self:create_mover(self.ui_window, "Memory UI")) end
-        if graph_window then table.insert(self.movers, self:create_mover(graph_window, "Graph UI")) end
-        if session_window then table.insert(self.movers, self:create_mover(session_window, "Session UI")) end
+    ALC.movers = {}
+        if ALC.ui_window then table.insert(ALC.movers, ALC.create_mover(ALC.ui_window, "Memory UI")) end
+        if graph_window then table.insert(ALC.movers, ALC.create_mover(graph_window, "Graph UI")) end
+        if session_window then table.insert(ALC.movers, ALC.create_mover(session_window, "Session UI")) end
         
-        self.references = {}
+        ALC.references = {}
         local function create_ref(target, text)
             if not target or target:IsHidden() or target:GetWidth() == 0 or target:GetHeight() == 0 then return end
             if not target.SetName then return end
@@ -547,7 +547,7 @@ function AutoLuaCleaner:unlock_ui()
             lbl:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
             lbl:SetVerticalAlignment(TEXT_ALIGN_CENTER)
             lbl:SetText(text)
-            table.insert(self.references, ref)
+            table.insert(ALC.references, ref)
         end
         
         local function scanHUD(parent)
@@ -594,8 +594,8 @@ function AutoLuaCleaner:unlock_ui()
             title = { text = "|c00FFFFALC UI Unlocked|r" }, 
             mainText = { text = "Move the UI elements to your desired locations.\n\nPress Accept to Save.\nPress Decline to Cancel." },
             buttons = { 
-                { text = "Save", keybind = "DIALOG_PRIMARY", callback = function() AutoLuaCleaner:lock_ui(true) end },
-                { text = "Cancel", keybind = "DIALOG_NEGATIVE", callback = function() AutoLuaCleaner:lock_ui(false) end }
+                { text = "Save", keybind = "DIALOG_PRIMARY", callback = function() ALC.lock_ui(true) end },
+                { text = "Cancel", keybind = "DIALOG_NEGATIVE", callback = function() ALC.lock_ui(false) end }
             }
         }
     end
@@ -609,119 +609,119 @@ function AutoLuaCleaner:unlock_ui()
     end, 500)
 end
 
-function AutoLuaCleaner:lock_ui(save)
-    if not self.is_ui_unlocked then return end
-    self.is_ui_unlocked = false
+function ALC.lock_ui(save)
+    if not ALC.is_ui_unlocked then return end
+    ALC.is_ui_unlocked = false
     
-    for _, mover in ipairs(self.movers) do
+    for _, mover in ipairs(ALC.movers) do
         mover:SetHidden(true)
     end
-    self.movers = {}
+    ALC.movers = {}
     
-    if self.references then
-        for _, ref in ipairs(self.references) do
+    if ALC.references then
+        for _, ref in ipairs(ALC.references) do
             ref:SetHidden(true)
         end
-        self.references = {}
+        ALC.references = {}
     end
     
     if save then
-        if self.ui_window then
-            self.settings.ui_x = self.ui_window:GetLeft()
-            self.settings.ui_y = self.ui_window:GetTop()
+        if ALC.ui_window then
+            ALC.settings.ui_x = ALC.ui_window:GetLeft()
+            ALC.settings.ui_y = ALC.ui_window:GetTop()
         end
         if graph_window then
-            self.settings.graph_x = graph_window:GetLeft()
-            self.settings.graph_y = graph_window:GetTop()
-            self.settings.is_graph_detached = true
+            ALC.settings.graph_x = graph_window:GetLeft()
+            ALC.settings.graph_y = graph_window:GetTop()
+            ALC.settings.is_graph_detached = true
         end
         if session_window then
-            self.settings.session_ui_x = session_window:GetLeft()
-            self.settings.session_ui_y = session_window:GetTop()
+            ALC.settings.session_ui_x = session_window:GetLeft()
+            ALC.settings.session_ui_y = session_window:GetTop()
         end
         if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r UI Positions Saved.") end
     else
-        self.settings.ui_x = self.orig_pos.ui.x
-        self.settings.ui_y = self.orig_pos.ui.y
-        self.settings.graph_x = self.orig_pos.graph.x
-        self.settings.graph_y = self.orig_pos.graph.y
-        self.settings.is_graph_detached = self.orig_pos.graph.detached
-        self.settings.session_ui_x = self.orig_pos.session.x
-        self.settings.session_ui_y = self.orig_pos.session.y
+        ALC.settings.ui_x = ALC.orig_pos.ui.x
+        ALC.settings.ui_y = ALC.orig_pos.ui.y
+        ALC.settings.graph_x = ALC.orig_pos.graph.x
+        ALC.settings.graph_y = ALC.orig_pos.graph.y
+        ALC.settings.is_graph_detached = ALC.orig_pos.graph.detached
+        ALC.settings.session_ui_x = ALC.orig_pos.session.x
+        ALC.settings.session_ui_y = ALC.orig_pos.session.y
         
-        self:update_ui_anchor()
-        self:update_graph_anchor()
-        self:update_session_anchor()
+        ALC.update_ui_anchor()
+        ALC.update_graph_anchor()
+        ALC.update_session_anchor()
         if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r UI Positioning Cancelled.") end
     end
     
-    self:toggle_ui_update()
+    ALC.toggle_ui_update()
     if session_window then
-        session_window:SetHidden(not self.settings.show_session_ui)
+        session_window:SetHidden(not ALC.settings.show_session_ui)
     end
 end
 
-function AutoLuaCleaner:run_manual_cleanup()
-    self.mem_state = 1
+function ALC.run_manual_cleanup()
+    ALC.mem_state = 1
     zo_callLater(function()
         local before = collectgarbage("count") / 1024
         for i = 1, 2 do collectgarbage("collect") end
         local after = collectgarbage("count") / 1024
         local freed = before - after
-        self.mem_state = 0
+        ALC.mem_state = 0
         
         if freed > 0.001 then
-            self.session_cleanups = self.session_cleanups + 1
-            self.session_mb_freed = self.session_mb_freed + freed
+            ALC.session_cleanups = ALC.session_cleanups + 1
+            ALC.session_mb_freed = ALC.session_mb_freed + freed
             
-            if self.settings and self.settings.track_stats then
-                self.settings.total_cleanups = (self.settings.total_cleanups or 0) + 1
-                self.settings.total_mb_freed = (self.settings.total_mb_freed or 0) + freed
-                self.settings.last_session_cleanups = self.session_cleanups
-                self.settings.last_session_mb_freed = self.session_mb_freed
+            if ALC.settings and ALC.settings.track_stats then
+                ALC.settings.total_cleanups = (ALC.settings.total_cleanups or 0) + 1
+                ALC.settings.total_mb_freed = (ALC.settings.total_mb_freed or 0) + freed
+                ALC.settings.last_session_cleanups = ALC.session_cleanups
+                ALC.settings.last_session_mb_freed = ALC.session_mb_freed
                 
                 local now = GetGameTimeMilliseconds()
-                if (now - self.last_priority_save_time) >= 900000 then
-                    GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(AutoLuaCleaner.name)
-                    self.last_priority_save_time = now
+                if (now - ALC.last_priority_save_time) >= 900000 then
+                    GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
+                    ALC.last_priority_save_time = now
                 end
             end
             
-            local msg = string.format("Memory Freed %s", self:format_memory(freed))
-            if self.settings.is_log_enabled and CHAT_SYSTEM then 
+            local msg = string.format("Memory Freed %s", ALC.format_memory(freed))
+            if ALC.settings.is_log_enabled and CHAT_SYSTEM then 
                 CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r " .. msg) 
             end
-            self:safe_csa("|c00FFFF" .. msg .. "|r", 90)
+            ALC.safe_csa("|c00FFFF" .. msg .. "|r", 90)
         end
         
-        if self.settings.show_ui then self:update_ui() end
+        if ALC.settings.show_ui then ALC.update_ui() end
     end, 500)
 end
 
-function AutoLuaCleaner:trigger_memory_check(check_type, delay)
-    if not self.settings.is_enabled then return end
-    if self.mem_state == 1 or self.is_mem_check_queued then return end
+function ALC.trigger_memory_check(check_type, delay)
+    if not ALC.settings.is_enabled then return end
+    if ALC.mem_state == 1 or ALC.is_mem_check_queued then return end
     
-    local current_mb = self:get_hybrid_memory_data()
+    local current_mb = ALC.get_hybrid_memory_data()
     local limit_threshold = IsConsoleUI() 
-        and self.settings.threshold_console 
-        or self.settings.threshold_pc
+        and ALC.settings.threshold_console 
+        or ALC.settings.threshold_pc
 
     if current_mb >= limit_threshold then
         local in_combat = IsUnitInCombat and IsUnitInCombat("player")
         if in_combat or IsUnitDead("player") then 
-            if self.settings.show_ui then AutoLuaCleaner:update_ui() end
+            if ALC.settings.show_ui then ALC.update_ui() end
             return 
         end
 
-        self.is_mem_check_queued = true
+        ALC.is_mem_check_queued = true
         zo_callLater(function()
-            self.is_mem_check_queued = false
-            if self.mem_state == 1 then return end
+            ALC.is_mem_check_queued = false
+            if ALC.mem_state == 1 then return end
             
             local still_in_combat = IsUnitInCombat and IsUnitInCombat("player")
             if still_in_combat or IsUnitDead("player") then 
-                if self.settings.show_ui then AutoLuaCleaner:update_ui() end
+                if ALC.settings.show_ui then ALC.update_ui() end
                 return 
             end
             
@@ -732,24 +732,24 @@ function AutoLuaCleaner:trigger_memory_check(check_type, delay)
                 if not in_menu then return end 
             end
             
-            local recheck_mb = self:get_hybrid_memory_data()
+            local recheck_mb = ALC.get_hybrid_memory_data()
             if recheck_mb >= limit_threshold then
-                self:run_manual_cleanup()
-                EVENT_MANAGER:UnregisterForUpdate(AutoLuaCleaner.name .. "_Fallback")
-                EVENT_MANAGER:RegisterForUpdate(AutoLuaCleaner.name .. "_Fallback", 
-                    self.settings.fallback_delay_sec * 1000, 
-                    function() AutoLuaCleaner:trigger_memory_check("Fallback", 0) end
+                ALC.run_manual_cleanup()
+                EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
+                EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_Fallback", 
+                    ALC.settings.fallback_delay_sec * 1000, 
+                    function() ALC.trigger_memory_check("Fallback", 0) end
                 )
             end
         end, delay)
     else
-        EVENT_MANAGER:UnregisterForUpdate(AutoLuaCleaner.name .. "_Fallback")
-        self.mem_state = 0
+        EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
+        ALC.mem_state = 0
     end
 end
 
-function AutoLuaCleaner:update_graph_visuals()
-    local alc = self
+function ALC.update_graph_visuals()
+    local alc = ALC
     if not alc.settings.is_graph_enabled or not graph_window or graph_window:IsHidden() then
         return
     end
@@ -833,7 +833,7 @@ function AutoLuaCleaner:update_graph_visuals()
                 local seg = graph_segments[i][j]
                 if j == active_blocks then
                     local block_val = (j / max_rows) * drawing_peak_mb
-                    local r, g, b = alc:get_gradient_color(block_val, drawing_peak_mb)
+                    local r, g, b = alc.get_gradient_color(block_val, drawing_peak_mb)
                     if is_over_ceiling then r, g, b = 1, 0, 0 end
                     seg:SetColor(r, g, b, final_alpha)
                     seg:SetHidden(false)
@@ -901,7 +901,7 @@ function AutoLuaCleaner:update_graph_visuals()
             local g_line = graph_grid_lines[i]
             if lbl and (mark <= peak_mb or mark == 0) then
                 local y_offset = 180 - ((mark / peak_mb) * 180)
-                alc:set_tag_alignment(lbl, y_offset)
+                alc.set_tag_alignment(lbl, y_offset)
                 
                 local m_color = "|c00FF00"
                 if IsConsoleUI() then
@@ -1023,7 +1023,7 @@ function AutoLuaCleaner:update_graph_visuals()
             local c_fps = "|c888888Off|r"; local c_drop = "|c888888Off|r"
             local c_ping = "|c888888Off|r"; local c_avg = "|c888888Off|r"
             local c_spike = "|c888888Off|r"
-            local alc_status_color = alc:get_fixed_hard_cap_color(current_mb)
+            local alc_status_color = alc.get_fixed_hard_cap_color(current_mb)
             
             if alc.settings.track_fps then
                 if stat_baseline_fps == 0 or fps > stat_baseline_fps then
@@ -1137,22 +1137,22 @@ function AutoLuaCleaner:update_graph_visuals()
             diag_labels.pct:SetText(string.format("Total: %s%d%%|r", alc_status_color, pct))
         end
         
-        if is_lite then alc:update_history_text() end
+        if is_lite then alc.update_history_text() end
     end
 end
 
-function AutoLuaCleaner:save_session_history()
-    if not self.settings.is_stats_log_enabled or session_peak_mb == 0 then return end
+function ALC.save_session_history()
+    if not ALC.settings.is_stats_log_enabled or session_peak_mb == 0 then return end
     
     local session_data = {
         date = GetDateStringFromTimestamp(GetTimeStamp()) .. " " .. GetTimeString(),
-        has_peak = self.settings.session_track_peak, 
-        has_avg = self.settings.session_track_avg,
-        has_final = self.settings.session_track_final, 
-        has_cleaned = self.settings.session_track_cleaned
+        has_peak = ALC.settings.session_track_peak, 
+        has_avg = ALC.settings.session_track_avg,
+        has_final = ALC.settings.session_track_final, 
+        has_cleaned = ALC.settings.session_track_cleaned
     }
     
-    if self.settings.session_track_peak then
+    if ALC.settings.session_track_peak then
         session_data.peak_mb = string.format("%.2f", session_peak_mb)
         session_data.peak_ping = stat_session_ping_max
         session_data.peak_fps_loss = stat_session_fps_loss_max
@@ -1160,7 +1160,7 @@ function AutoLuaCleaner:save_session_history()
         session_data.peak_ft = stat_session_ft_max
     end
     
-    if self.settings.session_track_avg then
+    if ALC.settings.session_track_avg then
         session_data.avg_ping = stat_session_ticks > 0 
             and math.floor(stat_session_ping_total / stat_session_ticks) or 0
         session_data.avg_kb = stat_session_ticks > 0 
@@ -1175,8 +1175,8 @@ function AutoLuaCleaner:save_session_history()
             and math.floor(stat_session_fps_total / stat_session_ticks) or 0
     end
     
-    if self.settings.session_track_final then
-        local current_mb = self:get_hybrid_memory_data()
+    if ALC.settings.session_track_final then
+        local current_mb = ALC.get_hybrid_memory_data()
         session_data.final_mb = string.format("%.2f", current_mb)
         session_data.final_ping = stat_session_ping_final
         session_data.final_fps_loss = stat_session_fps_loss_final
@@ -1185,21 +1185,21 @@ function AutoLuaCleaner:save_session_history()
         session_data.final_fps = stat_session_fps_final
     end
     
-    if self.settings.session_track_cleaned then
-        if self.settings.is_enabled then 
-            session_data.mem_cleaned_str = self:format_memory(self.session_mb_freed or 0)
+    if ALC.settings.session_track_cleaned then
+        if ALC.settings.is_enabled then 
+            session_data.mem_cleaned_str = ALC.format_memory(ALC.session_mb_freed or 0)
         else 
             session_data.mem_cleaned_str = "OFF" 
         end
     end
     
-    table.insert(self.settings.session_history, session_data)
-    while #self.settings.session_history > 3 do 
-        table.remove(self.settings.session_history, 1) 
+    table.insert(ALC.settings.session_history, session_data)
+    while #ALC.settings.session_history > 3 do 
+        table.remove(ALC.settings.session_history, 1) 
     end
 end
 
-function AutoLuaCleaner:format_history(entry)
+function ALC.format_history(entry)
     local lines = { string.format("|c00FFFF[%s]|r", entry.date or "?") }
     
     if entry.has_peak then
@@ -1237,22 +1237,22 @@ function AutoLuaCleaner:format_history(entry)
     return table.concat(lines, "\n")
 end
 
-function AutoLuaCleaner:update_history_text()
+function ALC.update_history_text()
     if not history_label then return end
     
     local hist_txt = "|c00FFFF[Previous Session Statistics]|r\n"
-    if #self.settings.session_history == 0 then 
+    if #ALC.settings.session_history == 0 then 
         hist_txt = hist_txt .. "No data logged yet.\n" 
     else
-        for i = 1, #self.settings.session_history do
-            hist_txt = hist_txt .. self:format_history(self.settings.session_history[i]) .. "\n"
+        for i = 1, #ALC.settings.session_history do
+            hist_txt = hist_txt .. ALC.format_history(ALC.settings.session_history[i]) .. "\n"
         end
     end
     
-    local p_perf = self.settings.prev_session_perf
+    local p_perf = ALC.settings.prev_session_perf
     if p_perf and p_perf.ft_ticks and p_perf.ft_ticks > 0 then
         local avg_ft = p_perf.ft_avg
-        local prev_freed = self.settings.prev_session_mb_freed or 0
+        local prev_freed = ALC.settings.prev_session_mb_freed or 0
         local formattedFreed = format_dynamic_gain(prev_freed)
         
         hist_txt = hist_txt .. string.format(
@@ -1266,7 +1266,7 @@ function AutoLuaCleaner:update_history_text()
         )
     end
     
-    local p_data = self.settings.saved_profiler_data
+    local p_data = ALC.settings.saved_profiler_data
     if p_data and #p_data > 0 then
         hist_txt = hist_txt .. "|c00FFFF[Last Profiler Scan Top 10]|r\n"
         for i, mod in ipairs(p_data) do
@@ -1286,23 +1286,23 @@ function AutoLuaCleaner:update_history_text()
     end
 end
 
-function AutoLuaCleaner:update_graph_anchor()
+function ALC.update_graph_anchor()
     if not graph_window then return end
     graph_window:ClearAnchors()
-    if self.settings.is_graph_detached and self.settings.graph_x and self.settings.graph_y then
-        graph_window:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, self.settings.graph_x, self.settings.graph_y)
+    if ALC.settings.is_graph_detached and ALC.settings.graph_x and ALC.settings.graph_y then
+        graph_window:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, ALC.settings.graph_x, ALC.settings.graph_y)
     else
-        graph_window:SetAnchor(TOPLEFT, self.ui_window, BOTTOMLEFT, 0, 5) 
+        graph_window:SetAnchor(TOPLEFT, ALC.ui_window, BOTTOMLEFT, 0, 5) 
     end
 end
 
-function AutoLuaCleaner:update_session_anchor()
+function ALC.update_session_anchor()
     if not session_window then return end
     session_window:ClearAnchors()
-    if self.settings.session_ui_x and self.settings.session_ui_y then
+    if ALC.settings.session_ui_x and ALC.settings.session_ui_y then
         session_window:SetAnchor(
             TOPLEFT, GuiRoot, TOPLEFT, 
-            self.settings.session_ui_x, self.settings.session_ui_y
+            ALC.settings.session_ui_x, ALC.settings.session_ui_y
         )
     else
         if graph_window and not graph_window:IsHidden() then 
@@ -1313,21 +1313,21 @@ function AutoLuaCleaner:update_session_anchor()
     end
 end
 
-function AutoLuaCleaner:build_session_ui()
+function ALC.build_session_ui()
     if not session_window then
         session_window = WINDOW_MANAGER:CreateControl("ALC_SessionUI", GuiRoot, CT_TOPLEVELCONTROL)
         session_window:SetDimensions(700, 250)
         session_window:SetClampedToScreen(true) 
         session_window:SetMouseEnabled(true)
-        session_window:SetMovable(not self.settings.is_session_locked)
+        session_window:SetMovable(not ALC.settings.is_session_locked)
         
         session_window:SetDrawTier(DT_HIGH)
         session_window:SetDrawLayer(DL_OVERLAY)
         session_window:SetDrawLevel(9000)
         
         session_window:SetHandler("OnMoveStop", function(ctrl)
-            self.settings.session_ui_x = ctrl:GetLeft()
-            self.settings.session_ui_y = ctrl:GetTop()
+            ALC.settings.session_ui_x = ctrl:GetLeft()
+            ALC.settings.session_ui_y = ctrl:GetTop()
         end)
         
         local bg = WINDOW_MANAGER:CreateControl(nil, session_window, CT_BACKDROP)
@@ -1344,13 +1344,13 @@ function AutoLuaCleaner:build_session_ui()
         history_label:SetAnchor(TOPLEFT, session_window, TOPLEFT, 5, 5)
         
         local cd_name = "ALC_ProfilerTimer"
-        self.profiler_timer_lbl = WINDOW_MANAGER:CreateControl(cd_name, session_window, CT_LABEL)
-        self.profiler_timer_lbl:SetFont(font_hist)
-        self.profiler_timer_lbl:SetColor(1, 0, 0, 1) 
-        self.profiler_timer_lbl:SetAnchor(TOPLEFT, session_window, TOPLEFT, 160, 5)
-        self.profiler_timer_lbl:SetText("")
+        ALC.profiler_timer_lbl = WINDOW_MANAGER:CreateControl(cd_name, session_window, CT_LABEL)
+        ALC.profiler_timer_lbl:SetFont(font_hist)
+        ALC.profiler_timer_lbl:SetColor(1, 0, 0, 1) 
+        ALC.profiler_timer_lbl:SetAnchor(TOPLEFT, session_window, TOPLEFT, 160, 5)
+        ALC.profiler_timer_lbl:SetText("")
         
-        if not self.prof_scan_btn then
+        if not ALC.prof_scan_btn then
             local btn_name = "ALC_ProfScanBtn"
             local btn = WINDOW_MANAGER:CreateControlFromVirtual(
                 btn_name, session_window, "ZO_DefaultButton"
@@ -1360,94 +1360,94 @@ function AutoLuaCleaner:build_session_ui()
             btn:SetDimensions(btn_w, btn_h)
             btn:SetFont(is_pad and "ZoFontGamepad18" or "ZoFontGameSmall")
             btn:SetAnchor(TOPRIGHT, session_window, TOPRIGHT, -5, 5)
-            btn:SetText(self.is_profiling and "Stop" or "Scan")
-            btn:SetHandler("OnClicked", function() AutoLuaCleaner:start_profiler() end)
-            self.prof_scan_btn = btn
+            btn:SetText(ALC.is_profiling and "Stop" or "Scan")
+            btn:SetHandler("OnClicked", function() ALC.start_profiler() end)
+            ALC.prof_scan_btn = btn
         end
         
-        self.session_fragment = ZO_HUDFadeSceneFragment:New(session_window)
+        ALC.session_fragment = ZO_HUDFadeSceneFragment:New(session_window)
     end
-    self:update_session_anchor()
+    ALC.update_session_anchor()
     
     if session_window then
-        session_window:SetHidden(not self.settings.show_session_ui)
-        if self.settings.show_session_ui then self:update_history_text() end
+        session_window:SetHidden(not ALC.settings.show_session_ui)
+        if ALC.settings.show_session_ui then ALC.update_history_text() end
     end
 end
 
-function AutoLuaCleaner:update_ui_anchor()
-    if not self.ui_window then return end
-    self.ui_window:ClearAnchors()
-    if self.settings.ui_x and self.settings.ui_y then
-        self.ui_window:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, self.settings.ui_x, self.settings.ui_y)
+function ALC.update_ui_anchor()
+    if not ALC.ui_window then return end
+    ALC.ui_window:ClearAnchors()
+    if ALC.settings.ui_x and ALC.settings.ui_y then
+        ALC.ui_window:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, ALC.settings.ui_x, ALC.settings.ui_y)
     else
         if ZO_CompassFrame then 
-            self.ui_window:SetAnchor(RIGHT, ZO_CompassFrame, LEFT, -40, 0)
+            ALC.ui_window:SetAnchor(RIGHT, ZO_CompassFrame, LEFT, -40, 0)
         else 
-            self.ui_window:SetAnchor(TOP, GuiRoot, TOP, -300, 40) 
+            ALC.ui_window:SetAnchor(TOP, GuiRoot, TOP, -300, 40) 
         end
     end
-    self.ui_window:SetDimensions(150, 40)
+    ALC.ui_window:SetDimensions(150, 40)
     
-    if self.ui_label then
-        local show_bar = self.settings.show_mem_ui_bar
-        if show_bar and not self.percent_bar then
-            local pct_bg = WINDOW_MANAGER:CreateControl("ALC_PercentBG", self.ui_label, CT_BACKDROP)
+    if ALC.ui_label then
+        local show_bar = ALC.settings.show_mem_ui_bar
+        if show_bar and not ALC.percent_bar then
+            local pct_bg = WINDOW_MANAGER:CreateControl("ALC_PercentBG", ALC.ui_label, CT_BACKDROP)
             pct_bg:SetDimensions(130, 8)
-            pct_bg:SetAnchor(TOP, self.ui_label, BOTTOM, 0, 5)
+            pct_bg:SetAnchor(TOP, ALC.ui_label, BOTTOM, 0, 5)
             pct_bg:SetCenterColor(0, 0, 0, 0.4)
             pct_bg:SetEdgeColor(0, 0, 0, 1)
-            self.percent_bg = pct_bg
+            ALC.percent_bg = pct_bg
             
             local pct_bar = WINDOW_MANAGER:CreateControl("ALC_PercentBar", pct_bg, CT_TEXTURE)
             pct_bar:SetAnchor(LEFT, pct_bg, LEFT, 0, 0)
             pct_bar:SetDimensions(0, 8)
-            self.percent_bar = pct_bar
+            ALC.percent_bar = pct_bar
         end
-        if self.percent_bg then self.percent_bg:SetHidden(not show_bar) end
-        if self.percent_bar then self.percent_bar:SetHidden(not show_bar) end
+        if ALC.percent_bg then ALC.percent_bg:SetHidden(not show_bar) end
+        if ALC.percent_bar then ALC.percent_bar:SetHidden(not show_bar) end
     end
 end
 
-function AutoLuaCleaner:update_ui()
-    if not self.settings.show_ui then return end
+function ALC.update_ui()
+    if not ALC.settings.show_ui then return end
     
-    local current_mb = self:get_hybrid_memory_data()
+    local current_mb = ALC.get_hybrid_memory_data()
     
-    local user_limit = IsConsoleUI() and self.settings.threshold_console or self.settings.threshold_pc
-    local _, fill_r, fill_g, fill_b = self:get_main_label_color(current_mb, user_limit)
+    local user_limit = IsConsoleUI() and ALC.settings.threshold_console or ALC.settings.threshold_pc
+    local _, fill_r, fill_g, fill_b = ALC.get_main_label_color(current_mb, user_limit)
     local fill_pct = math.min((current_mb / user_limit) * 100, 100)
     
-    local status_color = self:get_fixed_hard_cap_color(current_mb)
+    local status_color = ALC.get_fixed_hard_cap_color(current_mb)
     
     local t_str = IsUnitInCombat("player") and "|cFF0000[ALC] (Combat)|r" or "|c00FFFF[ALC]|r"
-    local m_str = self:format_memory(current_mb)
-    self.ui_label:SetText(string.format("%s Memory: %s%s|r", t_str, status_color, m_str))
+    local m_str = ALC.format_memory(current_mb)
+    ALC.ui_label:SetText(string.format("%s Memory: %s%s|r", t_str, status_color, m_str))
     
-    if self.percent_bar then
-        self.percent_bar:SetDimensions(130 * (fill_pct / 100), 8)
-        self.percent_bar:SetColor(fill_r, fill_g, fill_b, 1)
+    if ALC.percent_bar then
+        ALC.percent_bar:SetDimensions(130 * (fill_pct / 100), 8)
+        ALC.percent_bar:SetColor(fill_r, fill_g, fill_b, 1)
     end
-    self.ui_window:SetDimensions(self.ui_label:GetTextWidth() + 20, 40)
+    ALC.ui_window:SetDimensions(ALC.ui_label:GetTextWidth() + 20, 40)
 end
 
-function AutoLuaCleaner:create_ui()
+function ALC.create_ui()
     local win = WINDOW_MANAGER:CreateControl("AutoLuaCleanerUI", GuiRoot, CT_TOPLEVELCONTROL)
     win:SetClampedToScreen(true)
     win:SetMouseEnabled(true)
-    win:SetMovable(not self.settings.is_ui_locked)
+    win:SetMovable(not ALC.settings.is_ui_locked)
     win:SetHidden(true) 
     
     win:SetDrawTier(DT_HIGH)
     win:SetDrawLayer(DL_OVERLAY)
     win:SetDrawLevel(9000)
     
-    self.ui_window = win
-    self:update_ui_anchor()
+    ALC.ui_window = win
+    ALC.update_ui_anchor()
     
     win:SetHandler("OnMoveStop", function(ctrl) 
-        AutoLuaCleaner.settings.ui_x = ctrl:GetLeft()
-        AutoLuaCleaner.settings.ui_y = ctrl:GetTop()
+        ALC.settings.ui_x = ctrl:GetLeft()
+        ALC.settings.ui_y = ctrl:GetTop()
     end)
     
     local bg_tex = WINDOW_MANAGER:CreateControl("AutoLuaCleanerBG", win, CT_BACKDROP)
@@ -1465,93 +1465,93 @@ function AutoLuaCleaner:create_ui()
     text_lbl:SetColor(1, 1, 1, 1)
     text_lbl:SetText("[ALC] Loading...")
     text_lbl:SetAnchor(CENTER, win, CENTER, 0, 0)
-    self.ui_label = text_lbl
+    ALC.ui_label = text_lbl
     
-    self.ui_update_fn = function(ctrl, frame_time)
-        if not AutoLuaCleaner.settings.show_ui then return end
-        if frame_time - AutoLuaCleaner.last_ui_update < 1.0 then return end
-        AutoLuaCleaner.last_ui_update = frame_time
-        AutoLuaCleaner:update_ui()
+    ALC.ui_update_fn = function(ctrl, frame_time)
+        if not ALC.settings.show_ui then return end
+        if frame_time - ALC.last_ui_update < 1.0 then return end
+        ALC.last_ui_update = frame_time
+        ALC.update_ui()
     end
-    self.hud_fragment = ZO_HUDFadeSceneFragment:New(win)
+    ALC.hud_fragment = ZO_HUDFadeSceneFragment:New(win)
 end
 
-function AutoLuaCleaner:update_ui_scenes()
-    if not self.hud_fragment then return end
+function ALC.update_ui_scenes()
+    if not ALC.hud_fragment then return end
     local valid_scenes = {"hud", "hudui", "gamepad_hud"}
     
     for _, s_name in ipairs(valid_scenes) do
         local scene = SCENE_MANAGER:GetScene(s_name)
         if scene then 
-            scene:RemoveFragment(self.hud_fragment)
-            if self.graph_fragment then scene:RemoveFragment(self.graph_fragment) end
-            if self.session_fragment then scene:RemoveFragment(self.session_fragment) end
+            scene:RemoveFragment(ALC.hud_fragment)
+            if ALC.graph_fragment then scene:RemoveFragment(ALC.graph_fragment) end
+            if ALC.session_fragment then scene:RemoveFragment(ALC.session_fragment) end
         end
     end
     
     for _, s_name in ipairs(valid_scenes) do
         local hud_scene = SCENE_MANAGER:GetScene(s_name)
         if hud_scene then
-            if self.settings.show_ui and not self.settings.is_ui_global then 
-                hud_scene:AddFragment(self.hud_fragment) 
+            if ALC.settings.show_ui and not ALC.settings.is_ui_global then 
+                hud_scene:AddFragment(ALC.hud_fragment) 
             end
             
-            if self.graph_fragment and self.settings.is_graph_enabled and self.settings.show_ui then
-                if not self.settings.is_graph_global then 
-                    hud_scene:AddFragment(self.graph_fragment) 
+            if ALC.graph_fragment and ALC.settings.is_graph_enabled and ALC.settings.show_ui then
+                if not ALC.settings.is_graph_global then 
+                    hud_scene:AddFragment(ALC.graph_fragment) 
                 end
             end
             
-            if self.session_fragment and self.settings.show_session_ui then
-                if not self.settings.is_session_global then
-                    hud_scene:AddFragment(self.session_fragment)
+            if ALC.session_fragment and ALC.settings.show_session_ui then
+                if not ALC.settings.is_session_global then
+                    hud_scene:AddFragment(ALC.session_fragment)
                 end
             end
         end
     end
     
-    if self.ui_window then
-        if self.settings.show_ui and self.settings.is_ui_global then
-            self.ui_window:SetHidden(false)
-        elseif not self.settings.show_ui then
-            self.ui_window:SetHidden(true)
+    if ALC.ui_window then
+        if ALC.settings.show_ui and ALC.settings.is_ui_global then
+            ALC.ui_window:SetHidden(false)
+        elseif not ALC.settings.show_ui then
+            ALC.ui_window:SetHidden(true)
         end
     end
     
     if graph_window then
-        if self.settings.is_graph_enabled and self.settings.show_ui and self.settings.is_graph_global then
+        if ALC.settings.is_graph_enabled and ALC.settings.show_ui and ALC.settings.is_graph_global then
             graph_window:SetHidden(false)
-        elseif not (self.settings.is_graph_enabled and self.settings.show_ui) then
+        elseif not (ALC.settings.is_graph_enabled and ALC.settings.show_ui) then
             graph_window:SetHidden(true)
         end
     end
     
     if session_window then
-        if self.settings.show_session_ui and self.settings.is_session_global then
+        if ALC.settings.show_session_ui and ALC.settings.is_session_global then
             session_window:SetHidden(false)
-        elseif not self.settings.show_session_ui then
+        elseif not ALC.settings.show_session_ui then
             session_window:SetHidden(true)
         end
     end
 end
 
-function AutoLuaCleaner:build_graph_ui()
+function ALC.build_graph_ui()
     if not graph_window then
         graph_window = WINDOW_MANAGER:CreateControl("ALC_GraphUI", GuiRoot, CT_TOPLEVELCONTROL)
         graph_window:SetDimensions(360, 230)
         graph_window:SetClampedToScreen(true)
         graph_window:SetMouseEnabled(true)
-        graph_window:SetMovable(not self.settings.is_graph_locked)
+        graph_window:SetMovable(not ALC.settings.is_graph_locked)
         graph_window:SetDrawTier(DT_HIGH)
         graph_window:SetDrawLayer(DL_OVERLAY)
         graph_window:SetDrawLevel(9000)
         
-        self:update_graph_anchor()
+        ALC.update_graph_anchor()
         
         graph_window:SetHandler("OnMoveStop", function(ctrl)
-            self.settings.graph_x = ctrl:GetLeft()
-            self.settings.graph_y = ctrl:GetTop()
-            self.settings.is_graph_detached = true
+            ALC.settings.graph_x = ctrl:GetLeft()
+            ALC.settings.graph_y = ctrl:GetTop()
+            ALC.settings.is_graph_detached = true
         end)
         
         local bg = WINDOW_MANAGER:CreateControl(nil, graph_window, CT_BACKDROP)
@@ -1559,13 +1559,13 @@ function AutoLuaCleaner:build_graph_ui()
         bg:SetAnchor(BOTTOMRIGHT, graph_window, TOPLEFT, 300, 180)
         bg:SetCenterColor(0, 0, 0, 0.4)
         bg:SetEdgeColor(0, 0, 0, 0)
-        self.graph_bg = bg
+        ALC.graph_bg = bg
         
         local is_pad = IsInGamepadPreferredMode()
         local font_lbl = is_pad and "ZoFontGamepad18" or "$(CHAT_FONT)|14|soft-shadow-thin"
         local font_diag = is_pad and "ZoFontGamepad18" or "$(CHAT_FONT)|12|soft-shadow-thin"
         
-        self.graph_data = self.graph_data or {} 
+        ALC.graph_data = ALC.graph_data or {}
         local col_w = 240 / max_points
         local max_rows = 36
         local row_h = 180 / max_rows 
@@ -1632,7 +1632,7 @@ function AutoLuaCleaner:build_graph_ui()
         
         local diag_win = WINDOW_MANAGER:CreateControl(nil, graph_window, CT_CONTROL)
         diag_win:SetDimensions(100, 168)
-        self.diag_win = diag_win 
+        ALC.diag_win = diag_win 
         
         local function make_lbl(name, y_off, text)
             local l = WINDOW_MANAGER:CreateControl(name, diag_win, CT_LABEL)
@@ -1653,23 +1653,23 @@ function AutoLuaCleaner:build_graph_ui()
         diag_labels.kb = make_lbl("ALC_GraphKb", 112, "|cFF00FFAvg KB|r")
         diag_labels.mb = make_lbl("ALC_GraphMb", 126, "|cFFFFFFAvg MB|r")
         
-        self.graph_fragment = ZO_HUDFadeSceneFragment:New(graph_window)
+        ALC.graph_fragment = ZO_HUDFadeSceneFragment:New(graph_window)
     end
     
-    local is_lite = self.settings.lite_mode
-    local is_diagnostics_on = self.settings.show_graph_diags
+    local is_lite = ALC.settings.lite_mode
+    local is_diagnostics_on = ALC.settings.show_graph_diags
     
-    if self.diag_win then
-        self.diag_win:ClearAnchors()
+    if ALC.diag_win then
+        ALC.diag_win:ClearAnchors()
         if is_lite then 
-            self.diag_win:SetAnchor(TOPLEFT, graph_window, TOPLEFT, 65, 5) 
+            ALC.diag_win:SetAnchor(TOPLEFT, graph_window, TOPLEFT, 65, 5) 
         else 
-            self.diag_win:SetAnchor(TOPLEFT, self.graph_bg, TOPLEFT, 5, 15) 
+            ALC.diag_win:SetAnchor(TOPLEFT, ALC.graph_bg, TOPLEFT, 5, 15) 
         end
-        self.diag_win:SetHidden(not is_diagnostics_on)
+        ALC.diag_win:SetHidden(not is_diagnostics_on)
     end
     
-    if self.graph_bg then self.graph_bg:SetHidden(is_lite) end
+    if ALC.graph_bg then ALC.graph_bg:SetHidden(is_lite) end
     if is_lite then
         for _, seg in ipairs(graph_segments) do 
             for _, s in ipairs(seg) do s:SetHidden(true) end 
@@ -1682,21 +1682,21 @@ function AutoLuaCleaner:build_graph_ui()
         for _, l in ipairs(graph_labels_lat) do l:SetHidden(true) end
         for _, l in ipairs(graph_labels_x) do l:SetHidden(true) end
     end
-    self:update_session_anchor()
+    ALC.update_session_anchor()
 end
 
-function AutoLuaCleaner:show_missing_library_warning()
+function ALC.show_missing_library_warning()
     local dialog_id = "ALC_MISSING_LIBRARY_WARN"
     local popup_title = "|cFF0000Auto Lua Memory Cleaner - Missing Dependency|r"
     local popup_body = "To configure Auto Lua Memory Cleaner via Settings UI, you MUST install " ..
                        "the required library.\n\nPlease install:\n|c00FFFFLibAddonMenu-2.0|r"
                        
     local function on_ack()
-        AutoLuaCleaner.settings.has_shown_lib_warning_007 = true
+        ALC.settings.has_shown_lib_warning_007 = true
         local tick_ms = GetGameTimeMilliseconds()
-        if (tick_ms - AutoLuaCleaner.last_priority_save_time) >= 900000 then
-            GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(AutoLuaCleaner.name)
-            AutoLuaCleaner.last_priority_save_time = tick_ms
+        if (tick_ms - ALC.last_priority_save_time) >= 900000 then
+            GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
+            ALC.last_priority_save_time = tick_ms
         end
     end
 
@@ -1723,7 +1723,7 @@ function AutoLuaCleaner:show_missing_library_warning()
     end
 end
 
-function AutoLuaCleaner:parse_profiler_data()
+function ALC.parse_profiler_data()
     local addon_times = {}
     
     if not GetScriptProfilerNumFrames then
@@ -1747,15 +1747,15 @@ function AutoLuaCleaner:parse_profiler_data()
                     if mod_name and mod_name ~= "esoui" then
                         local is_valid = true
                         
-                        if not self.settings.can_profile_self and mod_name == self.name then
+                        if not ALC.settings.can_profile_self and mod_name == ALC.name then
                             is_valid = false
                         end
                         
-                        if not self.settings.include_esoprofiler and mod_name:lower() == "esoprofiler" then
+                        if not ALC.settings.include_esoprofiler and mod_name:lower() == "esoprofiler" then
                             is_valid = false
                         end
                         
-                        if self.settings.exclude_libs and string.find(mod_name, "Lib") then
+                        if ALC.settings.exclude_libs and string.find(mod_name, "Lib") then
                             is_valid = false
                         end
                         
@@ -1787,62 +1787,62 @@ function AutoLuaCleaner:parse_profiler_data()
     return top_10
 end
 
-function AutoLuaCleaner:stop_profiler()
-    if not self.is_profiling then return end
+function ALC.stop_profiler()
+    if not ALC.is_profiling then return end
     
     EVENT_MANAGER:UnregisterForUpdate("ALC_ProfilerCheck")
     StopScriptProfiler()
-    self.is_profiling = false
+    ALC.is_profiling = false
     
-    if self.profiler_timer_lbl then self.profiler_timer_lbl:SetText("") end
-    if self.prof_scan_btn then self.prof_scan_btn:SetText("Scan") end
+    if ALC.profiler_timer_lbl then ALC.profiler_timer_lbl:SetText("") end
+    if ALC.prof_scan_btn then ALC.prof_scan_btn:SetText("Scan") end
     
-    self.settings.saved_profiler_data = self:parse_profiler_data()
-    local top = self.settings.saved_profiler_data[1]
+    ALC.settings.saved_profiler_data = ALC.parse_profiler_data()
+    local top = ALC.settings.saved_profiler_data[1]
     local msg = string.format("Top Load: %.1fms by [%s]", top.peak, top.name)
     
     d("|c00FFFF[ALC Profiler]|r " .. msg)
-    self:safe_csa("|c00FFFF" .. msg .. "|r", 90)
+    ALC.safe_csa("|c00FFFF" .. msg .. "|r", 90)
     
-    if self.settings.show_session_ui then self:update_history_text() end
+    if ALC.settings.show_session_ui then ALC.update_history_text() end
 end
 
-function AutoLuaCleaner:start_profiler()
-    if self.is_profiling then 
-        self:stop_profiler() 
+function ALC.start_profiler()
+    if ALC.is_profiling then 
+        ALC.stop_profiler() 
         return 
     end
-    if not self.settings.is_profiler_enabled then return end
+    if not ALC.settings.is_profiler_enabled then return end
     
-    self.is_profiling = true
+    ALC.is_profiling = true
     StartScriptProfiler()
     d("|c00FFFF[ALC]|r Profiler Module started.")
     
-    if self.prof_scan_btn then self.prof_scan_btn:SetText("Stop") end
+    if ALC.prof_scan_btn then ALC.prof_scan_btn:SetText("Stop") end
     
-    self.profiler_ticks = 60
-    if self.profiler_timer_lbl then self.profiler_timer_lbl:SetText("(60s)") end
+    ALC.profiler_ticks = 60
+    if ALC.profiler_timer_lbl then ALC.profiler_timer_lbl:SetText("(60s)") end
     
     local is_console = (GetUIPlatform() == UI_PLATFORM_PS) or (GetUIPlatform() == UI_PLATFORM_XBOX)
     
     EVENT_MANAGER:RegisterForUpdate("ALC_ProfilerCheck", 1000, function()
-        if self.profiler_ticks > 0 then
-            self.profiler_ticks = self.profiler_ticks - 1
-            if self.profiler_timer_lbl then
-                self.profiler_timer_lbl:SetText(string.format("(%ds)", self.profiler_ticks))
+        if ALC.profiler_ticks > 0 then
+            ALC.profiler_ticks = ALC.profiler_ticks - 1
+            if ALC.profiler_timer_lbl then
+                ALC.profiler_timer_lbl:SetText(string.format("(%ds)", ALC.profiler_ticks))
             end
-            if self.profiler_ticks == 0 then self:stop_profiler() end
+            if ALC.profiler_ticks == 0 then ALC.stop_profiler() end
         end
         
-        if is_console and self:get_hybrid_memory_data() >= 99.0 then
+        if is_console and ALC.get_hybrid_memory_data() >= 99.0 then
             d("[ALC] 99MB limit reached! Auto-reloading to save data...")
-            self:stop_profiler()
+            ALC.stop_profiler()
             ReloadUI("ingame")
         end
     end)
 end
 
-function AutoLuaCleaner:integrate_with_perm_memento()
+function ALC.integrate_with_perm_memento()
     local pm_core = _G["PermMementoCore"]
     if pm_core and type(pm_core) == "table" and pm_core.settings then
         pm_core.settings.is_auto_cleanup = false
@@ -1851,53 +1851,53 @@ function AutoLuaCleaner:integrate_with_perm_memento()
     end
 end
 
-function AutoLuaCleaner:init(event_code, addon_name)
-    if addon_name ~= self.name then return end
-    EVENT_MANAGER:UnregisterForEvent(self.name, EVENT_ADD_ON_LOADED)
+function ALC.init(event_code, addon_name)
+    if addon_name ~= ALC.name then return end
+    EVENT_MANAGER:UnregisterForEvent(ALC.name, EVENT_ADD_ON_LOADED)
     
     local active_world = GetWorldName() or "Default"
-    self.settings = ZO_SavedVars:NewAccountWide(
-        "AutoLuaCleaner", 1, "AccountWide", self.defaults, active_world
+    ALC.settings = ZO_SavedVars:NewAccountWide(
+        "AutoLuaCleaner", 1, "AccountWide", ALC.defaults, active_world
     )
-    self:migrate_data()
+    ALC.migrate_data()
 
-    local found_lib, found_ver = self:get_settings_library()
-    if found_lib == "NONE" and not self.settings.has_shown_lib_warning_007 then 
-        self:show_missing_library_warning() 
+    local found_lib, found_ver = ALC.get_settings_library()
+    if found_lib == "NONE" and not ALC.settings.has_shown_lib_warning_007 then 
+        ALC.show_missing_library_warning() 
     end
     if found_lib == "NONE" or (found_lib == "LAM2" and found_ver < REQUIRED_LAM_VERSION) then 
-        self.settings.track_stats = false 
+        ALC.settings.track_stats = false 
     end
     
-    if not self.settings.install_date then
+    if not ALC.settings.install_date then
         local raw_d = GetDate()
         if raw_d and type(raw_d) == "number" then raw_d = tostring(raw_d) end
         if raw_d and string.len(raw_d) == 8 then 
-            self.settings.install_date = string.sub(raw_d, 1, 4) .. "/" .. 
+            ALC.settings.install_date = string.sub(raw_d, 1, 4) .. "/" .. 
                 string.sub(raw_d, 5, 6) .. "/" .. string.sub(raw_d, 7, 8)
         else 
-            self.settings.install_date = GetDateStringFromTimestamp(GetTimeStamp()) 
+            ALC.settings.install_date = GetDateStringFromTimestamp(GetTimeStamp()) 
         end
         d("|c00FFFF[ALC]|r Initial installation date recorded.")
     end
     
-    local s_avg_acc = self.frametime_avg_accumulator or 0
-    local s_ticks = self.frametime_ticks or 0
+    local s_avg_acc = ALC.frametime_avg_accumulator or 0
+    local s_ticks = ALC.frametime_ticks or 0
     
     if s_ticks > 0 then
         local current_fps = GetFramerate()
         local ft_final = current_fps > 0 and math.floor(1000 / current_fps) or 0
         local avg_ft = math.floor(s_avg_acc / s_ticks)
         
-        self.settings.prev_session_perf.ft_ticks = s_ticks
-        self.settings.prev_session_perf.ft_avg = avg_ft
-        self.settings.prev_session_perf.ft_final = ft_final
+        ALC.settings.prev_session_perf.ft_ticks = s_ticks
+        ALC.settings.prev_session_perf.ft_avg = avg_ft
+        ALC.settings.prev_session_perf.ft_final = ft_final
     end
     
-    self.frametime_avg_accumulator = 0
-    self.frametime_ticks = 0
-    self.session_cleanups = 0
-    self.session_mb_freed = 0
+    ALC.frametime_avg_accumulator = 0
+    ALC.frametime_ticks = 0
+    ALC.session_cleanups = 0
+    ALC.session_mb_freed = 0
     
     stat_session_ft_max = 0
     stat_session_ft_final = 0
@@ -1905,48 +1905,48 @@ function AutoLuaCleaner:init(event_code, addon_name)
     stat_session_fps_total = 0
     stat_session_fps_final = 0
     
-    local p_data = self.settings.saved_profiler_data
+    local p_data = ALC.settings.saved_profiler_data
     if p_data and p_data[1] and p_data[1].peak and p_data[1].peak > 0 then
-        self.settings.prev_session_perf.p_scan_occured = true
-        self.settings.prev_session_perf.p_scan_peak = p_data[1].peak
-        self.settings.prev_session_perf.p_scan_name = p_data[1].name
+        ALC.settings.prev_session_perf.p_scan_occured = true
+        ALC.settings.prev_session_perf.p_scan_peak = p_data[1].peak
+        ALC.settings.prev_session_perf.p_scan_name = p_data[1].name
     else
-        self.settings.prev_session_perf.p_scan_occured = false
+        ALC.settings.prev_session_perf.p_scan_occured = false
     end
     
-    self.settings.prev_session_cleanups = self.settings.last_session_cleanups or 0
-    self.settings.prev_session_mb_freed = self.settings.last_session_mb_freed or 0
-    self.settings.last_session_cleanups = 0
-    self.settings.last_session_mb_freed = 0
+    ALC.settings.prev_session_cleanups = ALC.settings.last_session_cleanups or 0
+    ALC.settings.prev_session_mb_freed = ALC.settings.last_session_mb_freed or 0
+    ALC.settings.last_session_cleanups = 0
+    ALC.settings.last_session_mb_freed = 0
     
-    if not self.settings.version_history then self.settings.version_history = {} end
-    local hist_len = #self.settings.version_history
-    if hist_len == 0 or self.settings.version_history[hist_len] ~= self.version then 
-        table.insert(self.settings.version_history, self.version)
-        if #self.settings.version_history > 3 then 
-            table.remove(self.settings.version_history, 1) 
+    if not ALC.settings.version_history then ALC.settings.version_history = {} end
+    local hist_len = #ALC.settings.version_history
+    if hist_len == 0 or ALC.settings.version_history[hist_len] ~= ALC.version then 
+        table.insert(ALC.settings.version_history, ALC.version)
+        if #ALC.settings.version_history > 3 then 
+            table.remove(ALC.settings.version_history, 1) 
         end 
         
-        self.settings.saved_profiler_data = {}
+        ALC.settings.saved_profiler_data = {}
         if CHAT_SYSTEM then 
             CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Version updated. Old profiler scans wiped.") 
         end
     end
     
-    self.settings.prev_session_perf.ft_peak = 0
-    self.settings.prev_session_perf.fps_loss_max = 0
+    ALC.settings.prev_session_perf.ft_peak = 0
+    ALC.settings.prev_session_perf.fps_loss_max = 0
     
-    self:create_ui()
-    self:build_lam2_menu()
+    ALC.create_ui()
+    ALC.build_lam2_menu()
     
-    if not IsConsoleUI() then self:refresh_stats_tracker() end
-    self:toggle_core_events()
-    self:toggle_ui_update()
-    self:build_session_ui()
+    if not IsConsoleUI() then ALC.refresh_stats_tracker() end
+    ALC.toggle_core_events()
+    ALC.toggle_ui_update()
+    ALC.build_session_ui()
     
-    EVENT_MANAGER:RegisterForEvent(self.name, EVENT_PLAYER_ACTIVATED, function() 
-        self:integrate_with_perm_memento()
-        self:trigger_memory_check("ZoneLoad", 5000) 
+    EVENT_MANAGER:RegisterForEvent(ALC.name, EVENT_PLAYER_ACTIVATED, function() 
+        ALC.integrate_with_perm_memento()
+        ALC.trigger_memory_check("ZoneLoad", 5000) 
     end)
 
     SLASH_COMMANDS["/alc"] = function(raw_arg)
@@ -1995,180 +1995,180 @@ function AutoLuaCleaner:init(event_code, addon_name)
     SLASH_COMMANDS["/autoluaclean"] = SLASH_COMMANDS["/alc"]
 
     SLASH_COMMANDS["/alcon"] = function() 
-        self.settings.is_enabled = not self.settings.is_enabled
-        self:toggle_core_events() 
+        ALC.settings.is_enabled = not ALC.settings.is_enabled
+        ALC.toggle_core_events() 
     end
     SLASH_COMMANDS["/alcenable"] = SLASH_COMMANDS["/alcon"]
     
     SLASH_COMMANDS["/alcui"] = function() 
-        self.settings.show_ui = not self.settings.show_ui
-        self:toggle_ui_update() 
+        ALC.settings.show_ui = not ALC.settings.show_ui
+        ALC.toggle_ui_update() 
     end
     SLASH_COMMANDS["/alctoggleui"] = SLASH_COMMANDS["/alcui"]
     
     SLASH_COMMANDS["/alclock"] = function() 
-        self.settings.is_ui_locked = not self.settings.is_ui_locked
-        if self.ui_window then self.ui_window:SetMovable(not self.settings.is_ui_locked) end 
+        ALC.settings.is_ui_locked = not ALC.settings.is_ui_locked
+        if ALC.ui_window then ALC.ui_window:SetMovable(not ALC.settings.is_ui_locked) end 
     end
     SLASH_COMMANDS["/alcuilock"] = SLASH_COMMANDS["/alclock"]
     
     SLASH_COMMANDS["/alcreset"] = function() 
-        self.settings.ui_x = nil
-        self.settings.ui_y = nil
-        self:update_ui_anchor() 
+        ALC.settings.ui_x = nil
+        ALC.settings.ui_y = nil
+        ALC.update_ui_anchor() 
     end
     SLASH_COMMANDS["/alcuireset"] = SLASH_COMMANDS["/alcreset"]
     
     SLASH_COMMANDS["/alccsa"] = function() 
-        self.settings.is_csa_enabled = not self.settings.is_csa_enabled 
+        ALC.settings.is_csa_enabled = not ALC.settings.is_csa_enabled 
     end
     SLASH_COMMANDS["/alctogglecsa"] = SLASH_COMMANDS["/alccsa"]
     
     SLASH_COMMANDS["/alcstats"] = function() 
-        self.settings.track_stats = not self.settings.track_stats
-        AutoLuaCleaner:refresh_stats_tracker() 
+        ALC.settings.track_stats = not ALC.settings.track_stats
+        ALC.refresh_stats_tracker() 
     end
     SLASH_COMMANDS["/alctogglestats"] = SLASH_COMMANDS["/alcstats"]
 
     if not IsConsoleUI() then 
         SLASH_COMMANDS["/alclogs"] = function() 
-            self.settings.is_log_enabled = not self.settings.is_log_enabled 
+            ALC.settings.is_log_enabled = not ALC.settings.is_log_enabled 
         end
         SLASH_COMMANDS["/alcchatlogs"] = SLASH_COMMANDS["/alclogs"] 
     end
 
-    SLASH_COMMANDS["/alcclean"] = function() self:run_manual_cleanup() end
+    SLASH_COMMANDS["/alcclean"] = function() ALC.run_manual_cleanup() end
     SLASH_COMMANDS["/alccleanup"] = SLASH_COMMANDS["/alcclean"]
 
-    if self.settings.is_stats_log_enabled then 
+    if ALC.settings.is_stats_log_enabled then 
         EVENT_MANAGER:RegisterForUpdate("ALC_StatsTick", 60000, function() 
-            AutoLuaCleaner:check_session_peak() 
+            ALC.check_session_peak() 
         end) 
     end
     
     EVENT_MANAGER:RegisterForEvent("ALC_LogOut", EVENT_PLAYER_DEACTIVATED, function() 
-        AutoLuaCleaner:save_session_history() 
+        ALC.save_session_history() 
     end)
 
     SLASH_COMMANDS["/alcgraph"] = function() 
-        self.settings.is_graph_enabled = not self.settings.is_graph_enabled
-        self:toggle_ui_update() 
+        ALC.settings.is_graph_enabled = not ALC.settings.is_graph_enabled
+        ALC.toggle_ui_update() 
     end
     
     SLASH_COMMANDS["/alcgraphreset"] = function() 
-        self.settings.graph_x = nil
-        self.settings.graph_y = nil
-        self.settings.is_graph_detached = false
-        if graph_window and self.ui_window then 
+        ALC.settings.graph_x = nil
+        ALC.settings.graph_y = nil
+        ALC.settings.is_graph_detached = false
+        if graph_window and ALC.ui_window then 
             graph_window:ClearAnchors()
-            graph_window:SetAnchor(TOPLEFT, self.ui_window, BOTTOMLEFT, 0, 5) 
+            graph_window:SetAnchor(TOPLEFT, ALC.ui_window, BOTTOMLEFT, 0, 5) 
         end 
     end
     
     SLASH_COMMANDS["/alcgraphlock"] = function() 
-        self.settings.is_graph_locked = not self.settings.is_graph_locked
-        if graph_window then graph_window:SetMovable(not self.settings.is_graph_locked) end 
+        ALC.settings.is_graph_locked = not ALC.settings.is_graph_locked
+        if graph_window then graph_window:SetMovable(not ALC.settings.is_graph_locked) end 
     end
     
     SLASH_COMMANDS["/alclite"] = function() 
-        self.settings.lite_mode = not self.settings.lite_mode
-        self:build_graph_ui() 
+        ALC.settings.lite_mode = not ALC.settings.lite_mode
+        ALC.build_graph_ui() 
     end
     
     SLASH_COMMANDS["/alcdiags"] = function() 
-        self.settings.show_graph_diags = not self.settings.show_graph_diags
-        self:build_graph_ui() 
+        ALC.settings.show_graph_diags = not ALC.settings.show_graph_diags
+        ALC.build_graph_ui() 
     end
     
     SLASH_COMMANDS["/alcbar"] = function() 
-        self.settings.show_mem_ui_bar = not self.settings.show_mem_ui_bar
-        self:update_ui_anchor() 
+        ALC.settings.show_mem_ui_bar = not ALC.settings.show_mem_ui_bar
+        ALC.update_ui_anchor() 
     end
     
     SLASH_COMMANDS["/alcfps"] = function() 
-        self.settings.track_fps = not self.settings.track_fps
+        ALC.settings.track_fps = not ALC.settings.track_fps
         stat_baseline_fps = 0
         stat_fps_stable_ticks = 0
         stat_last_fps_raw = 0
-        self:build_graph_ui() 
+        ALC.build_graph_ui() 
     end
     
     SLASH_COMMANDS["/alcping"] = function() 
-        self.settings.track_ping = not self.settings.track_ping
+        ALC.settings.track_ping = not ALC.settings.track_ping
         stat_ticks = 0
         stat_total_ping = 0
         stat_baseline_ping = 0
         stat_ping_stable_ticks = 0
         stat_last_ping_raw = 0
         graph_latency_pool = {}
-        self:build_graph_ui() 
+        ALC.build_graph_ui() 
     end
     
     SLASH_COMMANDS["/alcframetime"] = function() 
-        self.settings.track_frametime = not self.settings.track_frametime
+        ALC.settings.track_frametime = not ALC.settings.track_frametime
         graph_frametime_pool = {}
-        self:build_graph_ui() 
+        ALC.build_graph_ui() 
     end
     
     SLASH_COMMANDS["/alcgains"] = function() 
-        self.settings.track_memory_gains = not self.settings.track_memory_gains
-        self:build_graph_ui() 
+        ALC.settings.track_memory_gains = not ALC.settings.track_memory_gains
+        ALC.build_graph_ui() 
     end
     
     SLASH_COMMANDS["/alcsession"] = function() 
-        self.settings.show_session_ui = not self.settings.show_session_ui
-        self:build_session_ui() 
+        ALC.settings.show_session_ui = not ALC.settings.show_session_ui
+        ALC.build_session_ui() 
     end
     
     SLASH_COMMANDS["/alcsessionlock"] = function() 
-        self.settings.is_session_locked = not self.settings.is_session_locked
-        if session_window then session_window:SetMovable(not self.settings.is_session_locked) end 
+        ALC.settings.is_session_locked = not ALC.settings.is_session_locked
+        if session_window then session_window:SetMovable(not ALC.settings.is_session_locked) end 
     end
     
     SLASH_COMMANDS["/alcsessionreset"] = function() 
-        self.settings.session_ui_x = nil
-        self.settings.session_ui_y = nil
-        self:update_session_anchor() 
+        ALC.settings.session_ui_x = nil
+        ALC.settings.session_ui_y = nil
+        ALC.update_session_anchor() 
     end
     
     SLASH_COMMANDS["/alcstatpeak"] = function() 
-        self.settings.session_track_peak = not self.settings.session_track_peak 
+        ALC.settings.session_track_peak = not ALC.settings.session_track_peak 
     end
     
     SLASH_COMMANDS["/alcstatavg"] = function() 
-        self.settings.session_track_avg = not self.settings.session_track_avg 
+        ALC.settings.session_track_avg = not ALC.settings.session_track_avg 
     end
     
     SLASH_COMMANDS["/alcstatfinal"] = function() 
-        self.settings.session_track_final = not self.settings.session_track_final 
+        ALC.settings.session_track_final = not ALC.settings.session_track_final 
     end
 
     SLASH_COMMANDS["/alcprofile"] = function() 
-        self.settings.is_profiler_enabled = not self.settings.is_profiler_enabled
-        d("|c00FFFF[ALC]|r Profiler Logic: " .. tostring(self.settings.is_profiler_enabled))
+        ALC.settings.is_profiler_enabled = not ALC.settings.is_profiler_enabled
+        d("|c00FFFF[ALC]|r Profiler Logic: " .. tostring(ALC.settings.is_profiler_enabled))
     end
     
     SLASH_COMMANDS["/alcself"] = function() 
-        self.settings.can_profile_self = not self.settings.can_profile_self
-        d("|c00FFFF[ALC]|r Scan Self: " .. tostring(self.settings.can_profile_self))
+        ALC.settings.can_profile_self = not ALC.settings.can_profile_self
+        d("|c00FFFF[ALC]|r Scan Self: " .. tostring(ALC.settings.can_profile_self))
     end
     
     SLASH_COMMANDS["/alclibs"] = function() 
-        self.settings.exclude_libs = not self.settings.exclude_libs
+        ALC.settings.exclude_libs = not ALC.settings.exclude_libs
         d("|c00FFFF[ALC]|r Exclude Libraries filter is now [|cFFFF00" .. 
-            (self.settings.exclude_libs and "ON" or "OFF") .. "|r]")
+            (ALC.settings.exclude_libs and "ON" or "OFF") .. "|r]")
     end
     SLASH_COMMANDS["/alclibraries"] = SLASH_COMMANDS["/alclibs"]
     
-    SLASH_COMMANDS["/alcstart"] = function() self:start_profiler() end
+    SLASH_COMMANDS["/alcstart"] = function() ALC.start_profiler() end
     
     SLASH_COMMANDS["/alcstatclean"] = function() 
-        self.settings.session_track_cleaned = not self.settings.session_track_cleaned 
+        ALC.settings.session_track_cleaned = not ALC.settings.session_track_cleaned 
     end
 end
 
-function AutoLuaCleaner:build_lam2_menu()
-    local lib_type, lam_ver = self:get_settings_library()
+function ALC.build_lam2_menu()
+    local lib_type, lam_ver = ALC.get_settings_library()
     if lib_type == "NONE" then return end
 
     if lib_type == "LAM2" and lam_ver > 0 and lam_ver < REQUIRED_LAM_VERSION then
@@ -2178,7 +2178,7 @@ function AutoLuaCleaner:build_lam2_menu()
                 lam_ver, REQUIRED_LAM_VERSION
             )
             if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|cFF0000[ALC]|r " .. warn_msg) end
-            AutoLuaCleaner:safe_csa(warn_msg)
+            ALC.safe_csa(warn_msg)
         end, 4000)
         return
     end
@@ -2242,13 +2242,13 @@ function AutoLuaCleaner:build_lam2_menu()
     local lib_lam = LibAddonMenu2 or _G["LibAddonMenu2"]
     if not lib_lam then return end
     
-    local headerTitle = capitalizeAddonName(self.name)
+    local headerTitle = capitalizeAddonName(ALC.name)
     local menu_header = { 
         type = "panel", 
         name = "|c9CD04CAuto Lua Memory Cleaner|r", 
         displayName = "|c00FFFFAuto Lua Memory Cleaner|r", 
         author = "@|ca500f3A|r|cb400e6P|r|cc300daH|r|cd200cdO|r|ce100c1NlC|r", 
-        version = self.version, 
+        version = ALC.version, 
         registerForRefresh = true 
     }
     
@@ -2258,7 +2258,7 @@ function AutoLuaCleaner:build_lam2_menu()
         table.insert(build_data, { 
             type = "button", 
             name = "|c00FF00ALC LIVE STATS|r", 
-            tooltip = function() return AutoLuaCleaner:get_stats_text() end, 
+            tooltip = function() return ALC.get_stats_text() end, 
             func = function() end, 
             width = "full" 
         })
@@ -2296,10 +2296,10 @@ function AutoLuaCleaner:build_lam2_menu()
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Enable Auto Cleanup", 
-        getFunc = function() return AutoLuaCleaner.settings.is_enabled end, 
+        getFunc = function() return ALC.settings.is_enabled end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_enabled = v
-            AutoLuaCleaner:toggle_core_events() 
+            ALC.settings.is_enabled = v
+            ALC.toggle_core_events() 
         end 
     })
 
@@ -2308,16 +2308,16 @@ function AutoLuaCleaner:build_lam2_menu()
             type = "slider", 
             name = "Console Memory Threshold (MB)", 
             min = 5, max = 95, step = 1, 
-            getFunc = function() return AutoLuaCleaner.settings.threshold_console end, 
-            setFunc = function(v) AutoLuaCleaner.settings.threshold_console = v end 
+            getFunc = function() return ALC.settings.threshold_console end, 
+            setFunc = function(v) ALC.settings.threshold_console = v end 
         })
     else 
         table.insert(build_data, { 
             type = "slider", 
             name = "PC Memory Threshold (MB)", 
             min = 50, max = 800, step = 1, 
-            getFunc = function() return AutoLuaCleaner.settings.threshold_pc end, 
-            setFunc = function(v) AutoLuaCleaner.settings.threshold_pc = v end 
+            getFunc = function() return ALC.settings.threshold_pc end, 
+            setFunc = function(v) ALC.settings.threshold_pc = v end 
         }) 
     end
 
@@ -2325,8 +2325,8 @@ function AutoLuaCleaner:build_lam2_menu()
         type = "slider", 
         name = "Repeat Cleanup Delay (Seconds)", 
         min = 30, max = 1200, step = 10, 
-        getFunc = function() return AutoLuaCleaner.settings.fallback_delay_sec end, 
-        setFunc = function(v) AutoLuaCleaner.settings.fallback_delay_sec = v end 
+        getFunc = function() return ALC.settings.fallback_delay_sec end, 
+        setFunc = function(v) ALC.settings.fallback_delay_sec = v end 
     })
     
     table.insert(build_data, { type = "divider" })
@@ -2335,28 +2335,28 @@ function AutoLuaCleaner:build_lam2_menu()
         table.insert(build_data, { 
             type = "checkbox", 
             name = "Enable Chat Logs", 
-            getFunc = function() return AutoLuaCleaner.settings.is_log_enabled end, 
-            setFunc = function(v) AutoLuaCleaner.settings.is_log_enabled = v end 
+            getFunc = function() return ALC.settings.is_log_enabled end, 
+            setFunc = function(v) ALC.settings.is_log_enabled = v end 
         }) 
     end
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Track Statistics", 
-        getFunc = function() return AutoLuaCleaner.settings.track_stats end, 
+        getFunc = function() return ALC.settings.track_stats end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.track_stats = v
-            AutoLuaCleaner:refresh_stats_tracker()
+            ALC.settings.track_stats = v
+            ALC.refresh_stats_tracker()
             local s_ctrl = _G["ALC_StatsText"]
-            if s_ctrl and s_ctrl.desc then s_ctrl.desc:SetText(AutoLuaCleaner:get_stats_text()) end 
+            if s_ctrl and s_ctrl.desc then s_ctrl.desc:SetText(ALC.get_stats_text()) end 
         end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Screen Announcements", 
-        getFunc = function() return AutoLuaCleaner.settings.is_csa_enabled end, 
-        setFunc = function(v) AutoLuaCleaner.settings.is_csa_enabled = v end 
+        getFunc = function() return ALC.settings.is_csa_enabled end, 
+        setFunc = function(v) ALC.settings.is_csa_enabled = v end 
     })
     
     table.insert(build_data, { type = "divider" })
@@ -2364,69 +2364,69 @@ function AutoLuaCleaner:build_lam2_menu()
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Show Memory UI", 
-        getFunc = function() return AutoLuaCleaner.settings.show_ui end, 
+        getFunc = function() return ALC.settings.show_ui end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.show_ui = v
-            AutoLuaCleaner:toggle_ui_update() 
+            ALC.settings.show_ui = v
+            ALC.toggle_ui_update() 
         end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Render Memory UI in Menus", 
-        getFunc = function() return AutoLuaCleaner.settings.is_ui_global end, 
+        getFunc = function() return ALC.settings.is_ui_global end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_ui_global = v
-            AutoLuaCleaner:update_ui_scenes() 
+            ALC.settings.is_ui_global = v
+            ALC.update_ui_scenes() 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.show_ui end 
+        disabled = function() return not ALC.settings.show_ui end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Lock UI Position", 
-        getFunc = function() return AutoLuaCleaner.settings.is_ui_locked end, 
+        getFunc = function() return ALC.settings.is_ui_locked end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_ui_locked = v
-            if AutoLuaCleaner.ui_window then AutoLuaCleaner.ui_window:SetMovable(not v) end 
+            ALC.settings.is_ui_locked = v
+            if ALC.ui_window then ALC.ui_window:SetMovable(not v) end 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.show_ui end 
+        disabled = function() return not ALC.settings.show_ui end 
     })
     
     table.insert(build_data, { 
         type = "button", 
         name = "|cFF0000RESET UI POSITION|r", 
         func = function() 
-            AutoLuaCleaner.settings.ui_x = nil
-            AutoLuaCleaner.settings.ui_y = nil
-            AutoLuaCleaner:update_ui_anchor()
-            if AutoLuaCleaner.settings.is_log_enabled and CHAT_SYSTEM then 
+            ALC.settings.ui_x = nil
+            ALC.settings.ui_y = nil
+            ALC.update_ui_anchor()
+            if ALC.settings.is_log_enabled and CHAT_SYSTEM then 
                 CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r UI Position Reset.") 
             end 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.show_ui end 
+        disabled = function() return not ALC.settings.show_ui end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Enable Memory Graph", 
-        getFunc = function() return AutoLuaCleaner.settings.is_graph_enabled end, 
+        getFunc = function() return ALC.settings.is_graph_enabled end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_graph_enabled = v
-            AutoLuaCleaner:toggle_ui_update() 
+            ALC.settings.is_graph_enabled = v
+            ALC.toggle_ui_update() 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.show_ui end 
+        disabled = function() return not ALC.settings.show_ui end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Log Session History", 
-        getFunc = function() return AutoLuaCleaner.settings.is_stats_log_enabled end, 
+        getFunc = function() return ALC.settings.is_stats_log_enabled end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_stats_log_enabled = v
+            ALC.settings.is_stats_log_enabled = v
             if v then 
                 EVENT_MANAGER:RegisterForUpdate("ALC_StatsTick", 60000, function() 
-                    AutoLuaCleaner:check_session_peak() 
+                    ALC.check_session_peak() 
                 end) 
             else 
                 EVENT_MANAGER:UnregisterForUpdate("ALC_StatsTick") 
@@ -2437,74 +2437,74 @@ function AutoLuaCleaner:build_lam2_menu()
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Render Graph in Menus", 
-        getFunc = function() return AutoLuaCleaner.settings.is_graph_global end, 
+        getFunc = function() return ALC.settings.is_graph_global end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_graph_global = v
-            AutoLuaCleaner:update_ui_scenes() 
+            ALC.settings.is_graph_global = v
+            ALC.update_ui_scenes() 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.is_graph_enabled end 
+        disabled = function() return not ALC.settings.is_graph_enabled end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Lock Graph Position", 
-        getFunc = function() return AutoLuaCleaner.settings.is_graph_locked end, 
+        getFunc = function() return ALC.settings.is_graph_locked end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_graph_locked = v
+            ALC.settings.is_graph_locked = v
             if graph_window then graph_window:SetMovable(not v) end 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.is_graph_enabled end 
+        disabled = function() return not ALC.settings.is_graph_enabled end 
     })
     
     table.insert(build_data, { 
         type = "button", 
         name = "|cFF0000RESET GRAPH POSITION|r", 
         func = function() 
-            AutoLuaCleaner.settings.graph_x = nil
-            AutoLuaCleaner.settings.graph_y = nil
-            AutoLuaCleaner.settings.is_graph_detached = false
-            if graph_window and AutoLuaCleaner.ui_window then 
+            ALC.settings.graph_x = nil
+            ALC.settings.graph_y = nil
+            ALC.settings.is_graph_detached = false
+            if graph_window and ALC.ui_window then 
                 graph_window:ClearAnchors()
-                graph_window:SetAnchor(TOPLEFT, AutoLuaCleaner.ui_window, BOTTOMLEFT, 0, 5) 
+                graph_window:SetAnchor(TOPLEFT, ALC.ui_window, BOTTOMLEFT, 0, 5) 
             end
             if CHAT_SYSTEM then 
                 CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Graph Position Reset.") 
             end 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.is_graph_enabled end 
+        disabled = function() return not ALC.settings.is_graph_enabled end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Show Diagnostics Text", 
-        getFunc = function() return AutoLuaCleaner.settings.show_graph_diags end, 
+        getFunc = function() return ALC.settings.show_graph_diags end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.show_graph_diags = v
-            AutoLuaCleaner:build_graph_ui() 
+            ALC.settings.show_graph_diags = v
+            ALC.build_graph_ui() 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.is_graph_enabled end 
+        disabled = function() return not ALC.settings.is_graph_enabled end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Enable [Text Only] Lite Mode", 
-        getFunc = function() return AutoLuaCleaner.settings.lite_mode end, 
+        getFunc = function() return ALC.settings.lite_mode end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.lite_mode = v
-            AutoLuaCleaner:build_graph_ui() 
+            ALC.settings.lite_mode = v
+            ALC.build_graph_ui() 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.is_graph_enabled end 
+        disabled = function() return not ALC.settings.is_graph_enabled end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Show UI Percentage Bar", 
-        getFunc = function() return AutoLuaCleaner.settings.show_mem_ui_bar end, 
+        getFunc = function() return ALC.settings.show_mem_ui_bar end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.show_mem_ui_bar = v
-            AutoLuaCleaner:update_ui_anchor() 
+            ALC.settings.show_mem_ui_bar = v
+            ALC.update_ui_anchor() 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.show_ui end 
+        disabled = function() return not ALC.settings.show_ui end 
     })
     
     table.insert(build_data, { type = "divider" })
@@ -2513,96 +2513,96 @@ function AutoLuaCleaner:build_lam2_menu()
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Show Session History UI", 
-        getFunc = function() return AutoLuaCleaner.settings.show_session_ui end, 
+        getFunc = function() return ALC.settings.show_session_ui end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.show_session_ui = v
-            AutoLuaCleaner:build_session_ui() 
+            ALC.settings.show_session_ui = v
+            ALC.build_session_ui() 
         end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Render Session UI in Menus", 
-        getFunc = function() return AutoLuaCleaner.settings.is_session_global end, 
+        getFunc = function() return ALC.settings.is_session_global end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_session_global = v
-            AutoLuaCleaner:update_ui_scenes() 
+            ALC.settings.is_session_global = v
+            ALC.update_ui_scenes() 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.show_session_ui end 
+        disabled = function() return not ALC.settings.show_session_ui end 
     })
 
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Lock Session UI Position", 
-        getFunc = function() return AutoLuaCleaner.settings.is_session_locked end, 
+        getFunc = function() return ALC.settings.is_session_locked end, 
         setFunc = function(v) 
-            AutoLuaCleaner.settings.is_session_locked = v
+            ALC.settings.is_session_locked = v
             if session_window then session_window:SetMovable(not v) end 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.show_session_ui end 
+        disabled = function() return not ALC.settings.show_session_ui end 
     })
     
     table.insert(build_data, { 
         type = "button", 
         name = "|cFF0000RESET SESSION UI|r", 
         func = function() 
-            AutoLuaCleaner.settings.session_ui_x = nil
-            AutoLuaCleaner.settings.session_ui_y = nil
-            AutoLuaCleaner:update_session_anchor() 
+            ALC.settings.session_ui_x = nil
+            ALC.settings.session_ui_y = nil
+            ALC.update_session_anchor() 
         end, 
-        disabled = function() return not AutoLuaCleaner.settings.show_session_ui end 
+        disabled = function() return not ALC.settings.show_session_ui end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Log Session PEAK Data", 
         tooltip = "Logs the highest spike recorded during your session.", 
-        getFunc = function() return AutoLuaCleaner.settings.session_track_peak end, 
-        setFunc = function(v) AutoLuaCleaner.settings.session_track_peak = v end 
+        getFunc = function() return ALC.settings.session_track_peak end, 
+        setFunc = function(v) ALC.settings.session_track_peak = v end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Log Session AVERAGE Data", 
         tooltip = "Logs the average for your session.", 
-        getFunc = function() return AutoLuaCleaner.settings.session_track_avg end, 
-        setFunc = function(v) AutoLuaCleaner.settings.session_track_avg = v end 
+        getFunc = function() return ALC.settings.session_track_avg end, 
+        setFunc = function(v) ALC.settings.session_track_avg = v end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Log Session FINAL Data", 
         tooltip = "Logs the exact numbers seen right before you reloaded/logged out.", 
-        getFunc = function() return AutoLuaCleaner.settings.session_track_final end, 
-        setFunc = function(v) AutoLuaCleaner.settings.session_track_final = v end 
+        getFunc = function() return ALC.settings.session_track_final end, 
+        setFunc = function(v) ALC.settings.session_track_final = v end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Track MemCleaned (Session UI Only)", 
         tooltip = "Logs how much RAM was saved during the session.", 
-        getFunc = function() return AutoLuaCleaner.settings.session_track_cleaned end, 
-        setFunc = function(v) AutoLuaCleaner.settings.session_track_cleaned = v end 
+        getFunc = function() return ALC.settings.session_track_cleaned end, 
+        setFunc = function(v) ALC.settings.session_track_cleaned = v end 
     })
     
     table.insert(build_data, { type = "divider" })
     table.insert(build_data, { type = "header", name = "|cFFA500Tracking Modules|r" })
     
     table.insert(build_data, { type = "checkbox", name = "Track Ping", 
-        getFunc = function() return AutoLuaCleaner.settings.track_ping end, 
-        setFunc = function(v) AutoLuaCleaner.settings.track_ping = v end, width = menu_w })
+        getFunc = function() return ALC.settings.track_ping end, 
+        setFunc = function(v) ALC.settings.track_ping = v end, width = menu_w })
         
     table.insert(build_data, { type = "checkbox", name = "Track FPS", 
-        getFunc = function() return AutoLuaCleaner.settings.track_fps end, 
-        setFunc = function(v) AutoLuaCleaner.settings.track_fps = v end, width = menu_w })
+        getFunc = function() return ALC.settings.track_fps end, 
+        setFunc = function(v) ALC.settings.track_fps = v end, width = menu_w })
         
     table.insert(build_data, { type = "checkbox", name = "Track Memory Gains", 
-        getFunc = function() return AutoLuaCleaner.settings.track_memory_gains end, 
-        setFunc = function(v) AutoLuaCleaner.settings.track_memory_gains = v end, width = menu_w })
+        getFunc = function() return ALC.settings.track_memory_gains end, 
+        setFunc = function(v) ALC.settings.track_memory_gains = v end, width = menu_w })
         
     table.insert(build_data, { type = "checkbox", name = "Track Frametime", 
-        getFunc = function() return AutoLuaCleaner.settings.track_frametime end, 
-        setFunc = function(v) AutoLuaCleaner.settings.track_frametime = v end, width = menu_w })
+        getFunc = function() return ALC.settings.track_frametime end, 
+        setFunc = function(v) ALC.settings.track_frametime = v end, width = menu_w })
     
     table.insert(build_data, { type = "divider" })
     table.insert(build_data, { type = "header", name = "|c00FFFFProfiler Modules|r" })
@@ -2610,34 +2610,34 @@ function AutoLuaCleaner:build_lam2_menu()
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Enable Profiler Logic",
-        getFunc = function() return AutoLuaCleaner.settings.is_profiler_enabled end, 
-        setFunc = function(v) AutoLuaCleaner.settings.is_profiler_enabled = v end 
+        getFunc = function() return ALC.settings.is_profiler_enabled end, 
+        setFunc = function(v) ALC.settings.is_profiler_enabled = v end 
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Include ALC in Scan",
-        getFunc = function() return AutoLuaCleaner.settings.can_profile_self end, 
-        setFunc = function(v) AutoLuaCleaner.settings.can_profile_self = v end,
-        disabled = function() return not AutoLuaCleaner.settings.is_profiler_enabled end
+        getFunc = function() return ALC.settings.can_profile_self end, 
+        setFunc = function(v) ALC.settings.can_profile_self = v end,
+        disabled = function() return not ALC.settings.is_profiler_enabled end
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Include ESOProfiler in Scan",
         tooltip = "Include ESOProfiler's resources. Default is OFF (excluded).",
-        getFunc = function() return AutoLuaCleaner.settings.include_esoprofiler end, 
-        setFunc = function(v) AutoLuaCleaner.settings.include_esoprofiler = v end,
-        disabled = function() return not AutoLuaCleaner.settings.is_profiler_enabled end
+        getFunc = function() return ALC.settings.include_esoprofiler end, 
+        setFunc = function(v) ALC.settings.include_esoprofiler = v end,
+        disabled = function() return not ALC.settings.is_profiler_enabled end
     })
     
     table.insert(build_data, { 
         type = "checkbox", 
         name = "Exclude Libraries from Scan",
         tooltip = "Excludes standard 'Lib' dependencies from top load calculations.",
-        getFunc = function() return AutoLuaCleaner.settings.exclude_libs end, 
-        setFunc = function(v) AutoLuaCleaner.settings.exclude_libs = v end,
-        disabled = function() return not AutoLuaCleaner.settings.is_profiler_enabled end
+        getFunc = function() return ALC.settings.exclude_libs end, 
+        setFunc = function(v) ALC.settings.exclude_libs = v end,
+        disabled = function() return not ALC.settings.is_profiler_enabled end
     })
     
     local curThresholdLBL = "."
@@ -2645,9 +2645,9 @@ function AutoLuaCleaner:build_lam2_menu()
         type = "button", 
         name = "|cFF0000START 60s PROFILER|r", 
         tooltip = "Start the data gather now " .. curThresholdLBL,
-        func = function() AutoLuaCleaner:start_profiler() end, 
+        func = function() ALC.start_profiler() end, 
         width = "full",
-        disabled = function() return not AutoLuaCleaner.settings.is_profiler_enabled end
+        disabled = function() return not ALC.settings.is_profiler_enabled end
     })
     
     table.insert(build_data, { type = "divider" })
@@ -2655,7 +2655,7 @@ function AutoLuaCleaner:build_lam2_menu()
     table.insert(build_data, { 
         type = "button", 
         name = "|c00FFFFMANUAL CLEANUP|r", 
-        func = function() AutoLuaCleaner:run_manual_cleanup() end, 
+        func = function() ALC.run_manual_cleanup() end, 
         width = "full" 
     })
     
@@ -2665,7 +2665,7 @@ function AutoLuaCleaner:build_lam2_menu()
             type = "button", 
             name = "|cFFD700UNLOCK UI POSITIONING|r", 
             tooltip = "Allows you to freely drag the Memory, Graph, and Session UIs around the screen.",
-            func = function() AutoLuaCleaner:unlock_ui() end, 
+            func = function() ALC.unlock_ui() end, 
             width = "full" 
         })
         
@@ -2673,9 +2673,9 @@ function AutoLuaCleaner:build_lam2_menu()
             type = "button", 
             name = "|cFF0000LOCK UI POSITIONING|r", 
             tooltip = "Manually locks UI positioning and removes all highlights.",
-            func = function() AutoLuaCleaner:lock_ui(true) end, 
+            func = function() ALC.lock_ui(true) end, 
             width = "full",
-            disabled = function() return not AutoLuaCleaner.is_ui_unlocked end
+            disabled = function() return not ALC.is_ui_unlocked end
         })
         
     
@@ -2691,58 +2691,58 @@ function AutoLuaCleaner:build_lam2_menu()
         table.insert(build_data, { 
             type = "button", name = "Center Memory UI", width = "full",
             func = function() 
-                AutoLuaCleaner.settings.ui_x = (screen_w / 2) - 75
-                AutoLuaCleaner.settings.ui_y = (screen_h / 2) - 20
-                AutoLuaCleaner:update_ui_anchor() 
-                preview_window(AutoLuaCleaner.ui_window)
+                ALC.settings.ui_x = (screen_w / 2) - 75
+                ALC.settings.ui_y = (screen_h / 2) - 20
+                ALC.update_ui_anchor() 
+                preview_window(ALC.ui_window)
             end 
         })
         table.insert(build_data, { 
             type = "slider", name = "Memory UI X", min = 0, max = math.floor(screen_w), step = 1,
-            getFunc = function() return AutoLuaCleaner.settings.ui_x or 0 end,
+            getFunc = function() return ALC.settings.ui_x or 0 end,
             setFunc = function(v) 
-                AutoLuaCleaner.settings.ui_x = v
-                AutoLuaCleaner:update_ui_anchor()
-                preview_window(AutoLuaCleaner.ui_window)
+                ALC.settings.ui_x = v
+                ALC.update_ui_anchor()
+                preview_window(ALC.ui_window)
             end,
         })
         table.insert(build_data, { 
             type = "slider", name = "Memory UI Y", min = 0, max = math.floor(screen_h), step = 1,
-            getFunc = function() return AutoLuaCleaner.settings.ui_y or 0 end,
+            getFunc = function() return ALC.settings.ui_y or 0 end,
             setFunc = function(v) 
-                AutoLuaCleaner.settings.ui_y = v
-                AutoLuaCleaner:update_ui_anchor()
-                preview_window(AutoLuaCleaner.ui_window)
+                ALC.settings.ui_y = v
+                ALC.update_ui_anchor()
+                preview_window(ALC.ui_window)
             end,
         })
         
         table.insert(build_data, { 
             type = "button", name = "Center Graph UI", width = "full",
             func = function() 
-                AutoLuaCleaner.settings.graph_x = (screen_w / 2) - 180
-                AutoLuaCleaner.settings.graph_y = (screen_h / 2) - 115
-                AutoLuaCleaner.settings.is_graph_detached = true
-                AutoLuaCleaner:update_graph_anchor() 
+                ALC.settings.graph_x = (screen_w / 2) - 180
+                ALC.settings.graph_y = (screen_h / 2) - 115
+                ALC.settings.is_graph_detached = true
+                ALC.update_graph_anchor() 
                 preview_window(graph_window)
             end 
         })
         table.insert(build_data, { 
             type = "slider", name = "Graph UI X", min = 0, max = math.floor(screen_w), step = 1,
-            getFunc = function() return AutoLuaCleaner.settings.graph_x or 0 end,
+            getFunc = function() return ALC.settings.graph_x or 0 end,
             setFunc = function(v) 
-                AutoLuaCleaner.settings.graph_x = v
-                AutoLuaCleaner.settings.is_graph_detached = true
-                AutoLuaCleaner:update_graph_anchor()
+                ALC.settings.graph_x = v
+                ALC.settings.is_graph_detached = true
+                ALC.update_graph_anchor()
                 preview_window(graph_window)
             end,
         })
         table.insert(build_data, { 
             type = "slider", name = "Graph UI Y", min = 0, max = math.floor(screen_h), step = 1,
-            getFunc = function() return AutoLuaCleaner.settings.graph_y or 0 end,
+            getFunc = function() return ALC.settings.graph_y or 0 end,
             setFunc = function(v) 
-                AutoLuaCleaner.settings.graph_y = v
-                AutoLuaCleaner.settings.is_graph_detached = true
-                AutoLuaCleaner:update_graph_anchor()
+                ALC.settings.graph_y = v
+                ALC.settings.is_graph_detached = true
+                ALC.update_graph_anchor()
                 preview_window(graph_window)
             end,
         })
@@ -2750,27 +2750,27 @@ function AutoLuaCleaner:build_lam2_menu()
         table.insert(build_data, { 
             type = "button", name = "Center Session UI", width = "full",
             func = function() 
-                AutoLuaCleaner.settings.session_ui_x = (screen_w / 2) - 350
-                AutoLuaCleaner.settings.session_ui_y = (screen_h / 2) - 125
-                AutoLuaCleaner:update_session_anchor() 
+                ALC.settings.session_ui_x = (screen_w / 2) - 350
+                ALC.settings.session_ui_y = (screen_h / 2) - 125
+                ALC.update_session_anchor() 
                 preview_window(session_window)
             end 
         })
         table.insert(build_data, { 
             type = "slider", name = "Session UI X", min = 0, max = math.floor(screen_w), step = 1,
-            getFunc = function() return AutoLuaCleaner.settings.session_ui_x or 0 end,
+            getFunc = function() return ALC.settings.session_ui_x or 0 end,
             setFunc = function(v) 
-                AutoLuaCleaner.settings.session_ui_x = v
-                AutoLuaCleaner:update_session_anchor()
+                ALC.settings.session_ui_x = v
+                ALC.update_session_anchor()
                 preview_window(session_window)
             end,
         })
         table.insert(build_data, { 
             type = "slider", name = "Session UI Y", min = 0, max = math.floor(screen_h), step = 1,
-            getFunc = function() return AutoLuaCleaner.settings.session_ui_y or 0 end,
+            getFunc = function() return ALC.settings.session_ui_y or 0 end,
             setFunc = function(v) 
-                AutoLuaCleaner.settings.session_ui_y = v
-                AutoLuaCleaner:update_session_anchor()
+                ALC.settings.session_ui_y = v
+                ALC.update_session_anchor()
                 preview_window(session_window)
             end,
         })
@@ -2834,7 +2834,7 @@ function AutoLuaCleaner:build_lam2_menu()
 end
 
 EVENT_MANAGER:RegisterForEvent(
-    AutoLuaCleaner.name, 
+    ALC.name, 
     EVENT_ADD_ON_LOADED, 
-    function(...) AutoLuaCleaner:init(...) end
+    function(...) ALC.init(...) end
 )
