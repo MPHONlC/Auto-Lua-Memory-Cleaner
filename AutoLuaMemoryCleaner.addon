@@ -1,10 +1,10 @@
 ## Title: |c9CD04CAuto Lua Memory Cleaner|r
 ## Version: 0.0.8
-## AddOnVersion: 260318008
+## AddOnVersion: 260323008
 ## Author: |ca500f3A|r|cb400e6P|r|cc300daH|r|cd200cdO|r|ce100c1NlC|r
 ## APIVersion: 101049
 ## SavedVariables: AutoLuaCleaner
-## OptionalDependsOn: LibAddonMenu-2.0
+## OptionalDependsOn: LibAddonMenu-2.0 LibCombatAlerts
 ## Description: |cfa9c1bLightweight|r |cCCFF00Auto Lua Memory Cleaner|r
 
 ; Main files
