@@ -16,7 +16,7 @@ local ALC = {
     defaults = {
         is_enabled = true,
         threshold_pc = 400,
-        threshold_console = 85,
+        threshold_console = 70,
         fallback_delay_sec = 300,
         is_csa_enabled = true,
         is_log_enabled = false,
@@ -407,7 +407,7 @@ function ALC.get_stats_text()
     
     if IsConsoleUI() then
         lua_limit_txt = "100 MB (Hard Limit)"
-        mem_warning = current_mb > 85 and "|cFF0000(EXCEEDS CONSOLE LIMIT)|r" or "|c00FF00(Safe)|r" 
+        mem_warning = current_mb > 70 and "|cFF0000(EXCEEDS CONSOLE LIMIT)|r" or "|c00FF00(Safe)|r" 
     else
         lua_limit_txt = "Dynamic [512MB] (Auto-Scaling)"
         mem_warning = current_mb > 400 and "|cFFA500(High Global Memory)|r" or "|c00FF00(Safe)|r" 
@@ -454,6 +454,9 @@ function ALC.migrate_data()
             ALC.settings.track_stats = false
             ALC.settings.is_log_enabled = false
             ALC.settings.is_migrated_007 = true
+        end
+        if ALC.settings.threshold_console == 85 then
+            ALC.settings.threshold_console = 70
         end
     end
     if _G["AutoLuaCleaner"] then
@@ -1880,6 +1883,9 @@ function ALC.stop_profiler()
     
     local function process_data()
         ALC.settings.saved_profiler_data = ALC.parse_profiler_data()
+        GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
+        ALC.last_priority_save_time = GetGameTimeMilliseconds()
+        
         local p_data = ALC.settings.saved_profiler_data
         
         if not p_data or #p_data == 0 or (p_data[1] and p_data[1].name == "None Scanned") then
@@ -1946,10 +1952,12 @@ function ALC.start_profiler()
     
     if ALC.prof_scan_btn then ALC.prof_scan_btn:SetText("Stop") end
     
-    ALC.profiler_ticks = 60
-    if ALC.profiler_timer_lbl then ALC.profiler_timer_lbl:SetText("(60s)") end
+    local is_console = IsConsoleUI()
+    ALC.profiler_ticks = is_console and 30 or 60
     
-    local is_console = (GetUIPlatform() == UI_PLATFORM_PS) or (GetUIPlatform() == UI_PLATFORM_XBOX)
+    if ALC.profiler_timer_lbl then 
+        ALC.profiler_timer_lbl:SetText(string.format("(%ds)", ALC.profiler_ticks)) 
+    end
     
     EVENT_MANAGER:RegisterForUpdate("ALC_ProfilerCheck", 1000, function()
         if ALC.profiler_ticks > 0 then
@@ -1960,10 +1968,11 @@ function ALC.start_profiler()
             if ALC.profiler_ticks == 0 then ALC.stop_profiler() end
         end
         
-        if is_console and ALC.get_hybrid_memory_data() >= 99.0 then
-            d("[ALC] 99MB limit reached! Auto-reloading to save data...")
+        if is_console and ALC.get_hybrid_memory_data() >= 80.0 then
+            d("|cFF0000[ALC] Critical memory usage! Profiler stopped early to prevent crash.|r")
+            ALC.safe_csa("|cFF0000Critical memory! Profiler stopped.|r", 90)
+            ALC.profiler_ticks = 0
             ALC.stop_profiler()
-            ReloadUI("ingame")
         end
     end)
 end
@@ -2112,7 +2121,7 @@ function ALC.init(event_code, addon_name)
                 "|c00FFFF/alcprofile|r |cFFD700- Toggle Profiler Module|r\n",
                 "|c00FFFF/alcself|r |cFFD700- Toggle ALC in Profiler Scan|r\n",
                 "|c00FFFF/alclibs|r |cFFD700- Toggle Library Filtering|r\n",
-                "|c00FFFF/alcstart|r |cFFD700- Start 60s Profiler Data Gather|r\n",
+                "|c00FFFF/alcstart|r |cFFD700- Start " .. (IsConsoleUI() and "30s" or "60s") .. " Profiler Data Gather|r\n",
                 "|c00FFFF/alcprostop|r |cFFD700- Stop Profiler Scan|r\n",
                 "|c00FFFF/alcprolist|r |cFFD700- List Profiler Results to Chat|r\n",
                 "|c00FFFF/alcdelvars|r |cFFD700- Reset ALL settings to defaults|r\n"
@@ -2371,7 +2380,7 @@ function ALC.build_lam2_menu()
         "|c00FFFF/alcprofile|r |cFFD700- Toggle Profiler Module|r\n\n",
         "|c00FFFF/alcself|r |cFFD700- Toggle ALC in Profiler Scan|r\n\n",
         "|c00FFFF/alclibs|r |cFFD700- Toggle Library Filtering|r\n\n",
-        "|c00FFFF/alcstart|r |cFFD700- Start 60s Profiler Data Gather|r\n\n", 
+        "|c00FFFF/alcstart|r |cFFD700- Start " .. (is_pad and "30s" or "60s") .. " Profiler Data Gather|r\n\n", 
         "|c00FFFF/alcprostop|r |cFFD700- Stop Profiler Scan|r\n\n",
         "|c00FFFF/alcprolist|r |cFFD700- List Profiler Results to Chat|r\n\n",
         "|c00FFFF/alcdelvars|r |cFFD700- Reset ALL settings to defaults|r\n\n",
@@ -2405,7 +2414,7 @@ function ALC.build_lam2_menu()
         "|c00FFFF/alcprofile|r |cFFD700- Toggle Profiler Module|r\n",
         "|c00FFFF/alcself|r |cFFD700- Toggle ALC in Profiler Scan|r\n",
         "|c00FFFF/alclibs|r |cFFD700- Toggle Library Filtering|r\n",
-        "|c00FFFF/alcstart|r |cFFD700- Start 60s Profiler Data Gather|r\n", 
+        "|c00FFFF/alcstart|r |cFFD700- Start " .. (is_pad and "30s" or "60s") .. " Profiler Data Gather|r\n", 
         "|c00FFFF/alcprostop|r |cFFD700- Stop Profiler Scan|r\n",
         "|c00FFFF/alcprolist|r |cFFD700- List Profiler Results to Chat|r\n",
         "|c00FFFF/alcdelvars|r |cFFD700- Reset ALL settings to defaults|r\n",
@@ -2722,7 +2731,8 @@ function ALC.build_lam2_menu()
                 disabled = function() return not ALC.settings.is_profiler_enabled end
             },
             {
-                type = "button", name = "|cFF0000START 60s PROFILER|r",
+                type = "button", 
+                name = IsConsoleUI() and "|cFF0000START 30s PROFILER|r" or "|cFF0000START 60s PROFILER|r",
                 tooltip = "Start the data gather now.",
                 func = function() ALC.start_profiler() end, width = "full",
                 disabled = function() return not ALC.settings.is_profiler_enabled end
@@ -2858,12 +2868,12 @@ function ALC.build_lam2_menu()
 
     if is_pad and ALC.is_lca_valid then
         table.insert(ui_pos_controls, { 
-            type = "button", name = "Move Memory UI", width = "half",
+            type = "button", name = "Move Memory UI (D-Pad)", width = "half",
             func = function() 
                 preview_window(ALC.ui_window)
                 if ALC.ui_mover then ALC.ui_mover:ToggleGamepadMove(true) end
             end,
-            disabled = function() return ALC.ui_mover == nil end
+            disabled = function() return ALC.ui_mover == nil or ALC.settings.is_ui_locked end
         })
     end
     table.insert(ui_pos_controls, { 
@@ -2882,12 +2892,12 @@ function ALC.build_lam2_menu()
     
     if is_pad and ALC.is_lca_valid then
         table.insert(ui_pos_controls, { 
-            type = "button", name = "Move Graph UI", width = "half",
+            type = "button", name = "Move Graph UI (D-Pad)", width = "half",
             func = function() 
                 preview_window(graph_window)
                 if ALC.graph_mover then ALC.graph_mover:ToggleGamepadMove(true) end
             end,
-            disabled = function() return ALC.graph_mover == nil end
+            disabled = function() return ALC.graph_mover == nil or ALC.settings.is_graph_locked end
         })
     end
     table.insert(ui_pos_controls, { 
@@ -2907,12 +2917,12 @@ function ALC.build_lam2_menu()
 
     if is_pad and ALC.is_lca_valid then
         table.insert(ui_pos_controls, { 
-            type = "button", name = "Move Session UI", width = "half",
+            type = "button", name = "Move Session UI (D-Pad)", width = "half",
             func = function() 
                 preview_window(session_window)
                 if ALC.session_mover then ALC.session_mover:ToggleGamepadMove(true) end
             end,
-            disabled = function() return ALC.session_mover == nil end
+            disabled = function() return ALC.session_mover == nil or ALC.settings.is_session_locked end
         })
     end
     table.insert(ui_pos_controls, { 
