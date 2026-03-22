@@ -6,6 +6,7 @@
 -- NOT TESTED: 2026-03-18 | Pre-Release v0.0.8 | APIVersion: 101049 | LAM2 v41
 local is_release_build = false
 local REQUIRED_LAM_VERSION = 41
+local REQUIRED_LCA_VERSION = 7060
 local stat_fps_total = 0
 local stat_fps_count = 0
 
@@ -45,7 +46,7 @@ local ALC = {
         is_session_global = false,
         version_history = {},
         show_mem_ui_bar = false,
-        show_graph_diags = false,
+        show_graph_diags = true,
         lite_mode = false,
         track_fps = false,
         track_ping = false,
@@ -73,7 +74,9 @@ local ALC = {
         can_profile_self = false,
         include_esoprofiler = false,
         exclude_libs = false,
-        saved_profiler_data = {}
+        saved_profiler_data = {},
+        specific_lib_excludes = {},
+        specific_addon_excludes = {}
     },
     mem_state = 0,
     is_mem_check_queued = false,
@@ -160,6 +163,17 @@ local function capitalizeAddonName(str)
     return (str:gsub("^%l", string.upper))
 end
 
+function ALC.format_time(ms_val)
+    if not ms_val then return "0 ms" end
+    if ms_val < 1000 then return string.format("%.1f ms", ms_val) end
+    local sec = ms_val / 1000
+    if sec < 60 then return string.format("%.1f sec", sec) end
+    local mins = sec / 60
+    if mins < 60 then return string.format("%.1f min", mins) end
+    local hrs = mins / 60
+    return string.format("%.2f hr", hrs)
+end
+
 function ALC.get_hybrid_memory_data()
     if IsConsoleUI() then return GetTotalUserAddOnMemoryPoolUsageMB() end
     return collectgarbage("count") / 1024
@@ -226,16 +240,16 @@ function ALC.check_session_peak()
 end
 
 function ALC.get_settings_library()
-    local addon_manager = GetAddOnManager()
-    local lam_version = 0
-    for i = 1, addon_manager:GetNumAddOns() do
-        local addon_name, _, _, _, _, addon_state = addon_manager:GetAddOnInfo(i)
-        if addon_name == "LibAddonMenu-2.0" and addon_state == ADDON_STATE_ENABLED then
-            lam_version = addon_manager:GetAddOnVersion(i)
-            return "LAM2", lam_version
+    local am = GetAddOnManager()
+    local lam_ver, lca_ver = 0, 0
+    for i = 1, am:GetNumAddOns() do
+        local name, _, _, _, _, state = am:GetAddOnInfo(i)
+        if state == ADDON_STATE_ENABLED then
+            if name == "LibAddonMenu-2.0" then lam_ver = am:GetAddOnVersion(i) end
+            if name == "LibCombatAlerts" then lca_ver = am:GetAddOnVersion(i) end
         end
     end
-    return "NONE", 0
+    return lam_ver, lca_ver
 end
 
 function ALC.format_memory(value_mb)
@@ -293,21 +307,17 @@ function ALC.toggle_ui_update()
     if not ALC.ui_window then return end
     if ALC.settings.show_ui then
         ALC.ui_window:SetHandler("OnUpdate", ALC.ui_update_fn)
-        ALC.ui_window:SetHidden(false)
     else 
         ALC.ui_window:SetHandler("OnUpdate", nil)
-        ALC.ui_window:SetHidden(true) 
     end
     
     if ALC.settings.is_graph_enabled and ALC.settings.show_ui then
         if not graph_window then ALC.build_graph_ui() end
-        graph_window:SetHidden(false)
         EVENT_MANAGER:RegisterForUpdate("ALC_GraphTick", 250, function() 
             ALC.update_graph_visuals() 
         end)
     else
         EVENT_MANAGER:UnregisterForUpdate("ALC_GraphTick")
-        if graph_window then graph_window:SetHidden(true) end
     end
     ALC.update_ui_scenes()
 end
@@ -414,7 +424,7 @@ function ALC.get_stats_text()
     local p_data = ALC.settings.saved_profiler_data
     if p_data and p_data[1] and p_data[1].peak and p_data[1].peak > 0 then
         prof_txt = string.format(
-            "\n\n|c00FFFF[Last Profiler Scan]|r\nPeak Lag: %.1fms by [%s]",
+            "\n\n|c00FFFF[Last Profiler Scan]|r\nPeak: %.1fms by [%s]",
             p_data[1].peak,
             p_data[1].name
         )
@@ -511,9 +521,18 @@ function ALC.unlock_ui()
         session = {x = ALC.settings.session_ui_x, y = ALC.settings.session_ui_y}
     }
     
-    if ALC.ui_window then ALC.ui_window:SetHidden(false) end
-    if graph_window then graph_window:SetHidden(false) end
-    if session_window then session_window:SetHidden(false) end
+    local cur_scene = SCENE_MANAGER:GetCurrentScene()
+    if cur_scene then
+        if ALC.ui_window and cur_scene:HasFragment(ALC.hud_fragment) then 
+            ALC.ui_window:SetHidden(false) 
+        end
+        if graph_window and cur_scene:HasFragment(ALC.graph_fragment) then 
+            graph_window:SetHidden(false) 
+        end
+        if session_window and cur_scene:HasFragment(ALC.session_fragment) then 
+            session_window:SetHidden(false) 
+        end
+    end
     
     ALC.movers = {}
         if ALC.ui_window then table.insert(ALC.movers, ALC.create_mover(ALC.ui_window, "Memory UI")) end
@@ -758,7 +777,7 @@ function ALC.update_graph_visuals()
     alc.graph_data = alc.graph_data or {} 
     
     local is_lite = alc.settings.lite_mode
-    local current_mb = alc:get_hybrid_memory_data()
+    local current_mb = alc.get_hybrid_memory_data()
     local current_lat = alc.settings.track_ping and GetLatency() or 0
     local fps = (alc.settings.track_fps or alc.settings.track_frametime) and GetFramerate() or 0
     local current_ft = fps > 0 and math.floor(1000 / fps) or 0
@@ -1204,24 +1223,24 @@ function ALC.format_history(entry)
     
     if entry.has_peak then
         table.insert(lines, string.format(
-            "  |cFF0000Peak:|r %sMB | ms: %d | FT: %dms | FPS Loss: -%d | Gain: %dKB", 
-            entry.peak_mb or "?", entry.peak_ping or 0, entry.peak_ft or 0, 
+            "  |cFF0000Peak:|r %sMB | Latency: %s | FT: %s | FPS Loss: -%d | Gain: %dKB", 
+            entry.peak_mb or "?", ALC.format_time(entry.peak_ping), ALC.format_time(entry.peak_ft), 
             entry.peak_fps_loss or 0, entry.peak_kb or 0
         ))
     end
     
     if entry.has_avg then
         table.insert(lines, string.format(
-            "  |cFFA500Average:|r %sMB | ms: %d | FT: %dms | avg FPS: %d | FPS Loss: -%d | Gain: %dKB", 
-            string.format("%.2f", entry.avg_current_mb or 0), entry.avg_ping or 0, entry.avg_ft or 0, 
-            entry.avg_fps or 0, entry.avg_fps_loss or 0, entry.avg_kb or 0
+            "  |cFFA500Average:|r %sMB | Latency: %s | FT: %s | avg FPS: %d | FPS Loss: -%d | Gain: %dKB", 
+            string.format("%.2f", entry.avg_current_mb or 0), ALC.format_time(entry.avg_ping), 
+            ALC.format_time(entry.avg_ft), entry.avg_fps or 0, entry.avg_fps_loss or 0, entry.avg_kb or 0
         ))
     end
     
     if entry.has_final then
         table.insert(lines, string.format(
-            "  |cFFFFFFFinal:|r %sMB | ms: %d | FT: %dms | avg FPS: %d | FPS Loss: -%d | Gain: %dKB", 
-            entry.final_mb or "?", entry.final_ping or 0, entry.final_ft or 0, 
+            "  |cFFFFFFFinal:|r %sMB | Latency: %s | FT: %s | avg FPS: %d | FPS Loss: -%d | Gain: %dKB", 
+            entry.final_mb or "?", ALC.format_time(entry.final_ping), ALC.format_time(entry.final_ft), 
             entry.final_fps or 0, entry.final_fps_loss or 0, entry.final_kb or 0
         ))
     end
@@ -1235,6 +1254,15 @@ function ALC.format_history(entry)
     end
     
     return table.concat(lines, "\n")
+end
+
+function ALC.get_profiler_color(peak_ms)
+    if peak_ms >= 500 then return "FF0000"
+    elseif peak_ms >= 100 then return "FFA500"
+    elseif peak_ms >= 20 then return "FFFF00"
+    elseif peak_ms >= 5 then return "00FF00"
+    elseif peak_ms >= 1 then return "FFFFFF"
+    else return "888888" end
 end
 
 function ALC.update_history_text()
@@ -1259,20 +1287,22 @@ function ALC.update_history_text()
             "\n|c00FFFF[Previous Session Performance]|r\n" ..
             "  Avg Frame: %d\n" .. 
             "  Max FPS Loss: -%d FPS\n" ..
-            "  Frametime (ms): %d | %d | %d\n" .. 
+            "  Frametime: %s | %s | %s\n" .. 
             "  Memory Freed: %s\n",
-            p_perf.fps_avg or 0, p_perf.fps_loss_max or 0, p_perf.ft_final or 0, 
-            p_perf.ft_peak or 0, avg_ft, formattedFreed
+            p_perf.fps_avg or 0, p_perf.fps_loss_max or 0, ALC.format_time(p_perf.ft_final), 
+            ALC.format_time(p_perf.ft_peak), ALC.format_time(avg_ft), formattedFreed
         )
     end
     
     local p_data = ALC.settings.saved_profiler_data
     if p_data and #p_data > 0 then
         hist_txt = hist_txt .. "|c00FFFF[Last Profiler Scan Top 10]|r\n"
-        for i, mod in ipairs(p_data) do
+        for i = 1, math.min(10, #p_data) do
+            local mod = p_data[i]
+            local color = ALC.get_profiler_color(mod.peak)
             hist_txt = hist_txt .. string.format(
-                "  %d. %.1fms |cFFD700[%s]|r\n",
-                i, mod.peak, mod.name
+                "  %d. %s |c%s[%s]|r\n",
+                i, ALC.format_time(mod.peak), color, mod.name
             )
         end
     end
@@ -1325,10 +1355,18 @@ function ALC.build_session_ui()
         session_window:SetDrawLayer(DL_OVERLAY)
         session_window:SetDrawLevel(9000)
         
-        session_window:SetHandler("OnMoveStop", function(ctrl)
-            ALC.settings.session_ui_x = ctrl:GetLeft()
-            ALC.settings.session_ui_y = ctrl:GetTop()
-        end)
+        if ALC.is_lca_valid then
+            ALC.session_mover = LibCombatAlerts.MoveableControl:New(session_window)
+            ALC.session_mover:RegisterCallback(ALC.name .. "_Sess", 2, function(new_pos)
+                if type(new_pos.left) == "number" then ALC.settings.session_ui_x = new_pos.left end
+                if type(new_pos.top) == "number" then ALC.settings.session_ui_y = new_pos.top end
+            end)
+        else
+            session_window:SetHandler("OnMoveStop", function(ctrl)
+                ALC.settings.session_ui_x = ctrl:GetLeft()
+                ALC.settings.session_ui_y = ctrl:GetTop()
+            end)
+        end
         
         local bg = WINDOW_MANAGER:CreateControl(nil, session_window, CT_BACKDROP)
         bg:SetAnchorFill(session_window)
@@ -1370,7 +1408,7 @@ function ALC.build_session_ui()
     ALC.update_session_anchor()
     
     if session_window then
-        session_window:SetHidden(not ALC.settings.show_session_ui)
+        ALC.update_ui_scenes()
         if ALC.settings.show_session_ui then ALC.update_history_text() end
     end
 end
@@ -1445,10 +1483,18 @@ function ALC.create_ui()
     ALC.ui_window = win
     ALC.update_ui_anchor()
     
-    win:SetHandler("OnMoveStop", function(ctrl) 
-        ALC.settings.ui_x = ctrl:GetLeft()
-        ALC.settings.ui_y = ctrl:GetTop()
-    end)
+    if ALC.is_lca_valid then
+        ALC.ui_mover = LibCombatAlerts.MoveableControl:New(win)
+        ALC.ui_mover:RegisterCallback(ALC.name .. "_UI", 2, function(new_pos)
+            if type(new_pos.left) == "number" then ALC.settings.ui_x = new_pos.left end
+            if type(new_pos.top) == "number" then ALC.settings.ui_y = new_pos.top end
+        end)
+    else
+        win:SetHandler("OnMoveStop", function(ctrl) 
+            ALC.settings.ui_x = ctrl:GetLeft()
+            ALC.settings.ui_y = ctrl:GetTop()
+        end)
+    end
     
     local bg_tex = WINDOW_MANAGER:CreateControl("AutoLuaCleanerBG", win, CT_BACKDROP)
     bg_tex:SetAnchor(TOPLEFT, win, TOPLEFT, 0, 0)
@@ -1510,27 +1556,32 @@ function ALC.update_ui_scenes()
         end
     end
     
+    local cur_scene = SCENE_MANAGER:GetCurrentScene()
+    
     if ALC.ui_window then
-        if ALC.settings.show_ui and ALC.settings.is_ui_global then
-            ALC.ui_window:SetHidden(false)
-        elseif not ALC.settings.show_ui then
+        if not ALC.settings.show_ui then
             ALC.ui_window:SetHidden(true)
+        else
+            local should_show = ALC.settings.is_ui_global or (cur_scene and cur_scene:HasFragment(ALC.hud_fragment))
+            ALC.ui_window:SetHidden(not should_show)
         end
     end
     
     if graph_window then
-        if ALC.settings.is_graph_enabled and ALC.settings.show_ui and ALC.settings.is_graph_global then
-            graph_window:SetHidden(false)
-        elseif not (ALC.settings.is_graph_enabled and ALC.settings.show_ui) then
+        if not (ALC.settings.is_graph_enabled and ALC.settings.show_ui) then
             graph_window:SetHidden(true)
+        else
+            local should_show = ALC.settings.is_graph_global or (cur_scene and cur_scene:HasFragment(ALC.graph_fragment))
+            graph_window:SetHidden(not should_show)
         end
     end
     
     if session_window then
-        if ALC.settings.show_session_ui and ALC.settings.is_session_global then
-            session_window:SetHidden(false)
-        elseif not ALC.settings.show_session_ui then
+        if not ALC.settings.show_session_ui then
             session_window:SetHidden(true)
+        else
+            local should_show = ALC.settings.is_session_global or (cur_scene and cur_scene:HasFragment(ALC.session_fragment))
+            session_window:SetHidden(not should_show)
         end
     end
 end
@@ -1548,11 +1599,20 @@ function ALC.build_graph_ui()
         
         ALC.update_graph_anchor()
         
-        graph_window:SetHandler("OnMoveStop", function(ctrl)
-            ALC.settings.graph_x = ctrl:GetLeft()
-            ALC.settings.graph_y = ctrl:GetTop()
-            ALC.settings.is_graph_detached = true
-        end)
+        if ALC.is_lca_valid then
+            ALC.graph_mover = LibCombatAlerts.MoveableControl:New(graph_window)
+            ALC.graph_mover:RegisterCallback(ALC.name .. "_Graph", 2, function(new_pos)
+                if type(new_pos.left) == "number" then ALC.settings.graph_x = new_pos.left end
+                if type(new_pos.top) == "number" then ALC.settings.graph_y = new_pos.top end
+                ALC.settings.is_graph_detached = true
+            end)
+        else
+            graph_window:SetHandler("OnMoveStop", function(ctrl)
+                ALC.settings.graph_x = ctrl:GetLeft()
+                ALC.settings.graph_y = ctrl:GetTop()
+                ALC.settings.is_graph_detached = true
+            end)
+        end
         
         local bg = WINDOW_MANAGER:CreateControl(nil, graph_window, CT_BACKDROP)
         bg:SetAnchor(TOPLEFT, graph_window, TOPLEFT, 60, 0)
@@ -1632,6 +1692,7 @@ function ALC.build_graph_ui()
         
         local diag_win = WINDOW_MANAGER:CreateControl(nil, graph_window, CT_CONTROL)
         diag_win:SetDimensions(100, 168)
+        diag_win:SetDrawLevel(5)
         ALC.diag_win = diag_win 
         
         local function make_lbl(name, y_off, text)
@@ -1686,13 +1747,25 @@ function ALC.build_graph_ui()
 end
 
 function ALC.show_missing_library_warning()
+    local alerts = {}
+    local lam_ver, lca_ver = ALC.get_settings_library()
+    lam_ver = lam_ver or 0
+    lca_ver = lca_ver or 0
+    
+    if lam_ver == 0 then table.insert(alerts, "|c00FFFFLibAddonMenu-2.0|r (Missing)")
+    elseif lam_ver < REQUIRED_LAM_VERSION then table.insert(alerts, "|c00FFFFLibAddonMenu-2.0|r (Outdated)") end
+    
+    if not LibCombatAlerts then table.insert(alerts, "|c00FFFFLibCombatAlerts|r (Missing)")
+    elseif lca_ver < REQUIRED_LCA_VERSION then table.insert(alerts, "|c00FFFFLibCombatAlerts|r (Outdated)") end
+    
+    if #alerts == 0 then return end
+    
     local dialog_id = "ALC_MISSING_LIBRARY_WARN"
-    local popup_title = "|cFF0000Auto Lua Memory Cleaner - Missing Dependency|r"
-    local popup_body = "To configure Auto Lua Memory Cleaner via Settings UI, you MUST install " ..
-                       "the required library.\n\nPlease install:\n|c00FFFFLibAddonMenu-2.0|r"
+    local popup_title = "|cFF0000ALC - Dependency Alert|r"
+    local popup_body = "For full functionality, please update or install:\n\n" .. table.concat(alerts, "\n")
                        
     local function on_ack()
-        ALC.settings.has_shown_lib_warning_007 = true
+        ALC.settings.has_shown_lib_warning_008 = true
         local tick_ms = GetGameTimeMilliseconds()
         if (tick_ms - ALC.last_priority_save_time) >= 900000 then
             GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
@@ -1719,7 +1792,7 @@ function ALC.show_missing_library_warning()
     end, 2000)
 
     if CHAT_SYSTEM then 
-        CHAT_SYSTEM:AddMessage("|cFF0000[ALC Setup Warning]|r Please install LibAddonMenu-2.0.") 
+        CHAT_SYSTEM:AddMessage("|cFF0000[ALC Setup Warning]|r Please update your libraries.") 
     end
 end
 
@@ -1755,7 +1828,16 @@ function ALC.parse_profiler_data()
                             is_valid = false
                         end
                         
-                        if ALC.settings.exclude_libs and string.find(mod_name, "Lib") then
+                        local m_name_lower = mod_name:lower()
+                        local is_lib = string.find(m_name_lower, "lib")
+                        
+                        if ALC.settings.exclude_libs and is_lib then
+                            is_valid = false
+                        end
+                        if is_lib and ALC.settings.specific_lib_excludes[mod_name] then
+                            is_valid = false
+                        end
+                        if not is_lib and ALC.settings.specific_addon_excludes[mod_name] then
                             is_valid = false
                         end
                         
@@ -1775,16 +1857,16 @@ function ALC.parse_profiler_data()
     end
     table.sort(sorted, function(a, b) return a.peak > b.peak end)
     
-    local top_10 = {}
-    for i = 1, math.min(10, #sorted) do
-        top_10[i] = {
+    local top_all = {}
+    for i = 1, #sorted do
+        top_all[i] = {
             name = sorted[i].name,
             peak = math.floor(sorted[i].peak * 100) / 100
         }
     end
     
-    if #top_10 == 0 then table.insert(top_10, { name = "None Scanned", peak = 0 }) end
-    return top_10
+    if #top_all == 0 then table.insert(top_all, { name = "None Scanned", peak = 0 }) end
+    return top_all
 end
 
 function ALC.stop_profiler()
@@ -1794,17 +1876,61 @@ function ALC.stop_profiler()
     StopScriptProfiler()
     ALC.is_profiling = false
     
-    if ALC.profiler_timer_lbl then ALC.profiler_timer_lbl:SetText("") end
     if ALC.prof_scan_btn then ALC.prof_scan_btn:SetText("Scan") end
     
-    ALC.settings.saved_profiler_data = ALC.parse_profiler_data()
-    local top = ALC.settings.saved_profiler_data[1]
-    local msg = string.format("Top Load: %.1fms by [%s]", top.peak, top.name)
-    
-    d("|c00FFFF[ALC Profiler]|r " .. msg)
-    ALC.safe_csa("|c00FFFF" .. msg .. "|r", 90)
-    
-    if ALC.settings.show_session_ui then ALC.update_history_text() end
+    local function process_data()
+        ALC.settings.saved_profiler_data = ALC.parse_profiler_data()
+        local p_data = ALC.settings.saved_profiler_data
+        
+        if not p_data or #p_data == 0 or (p_data[1] and p_data[1].name == "None Scanned") then
+            d("|c00FFFF[ALC Profiler]|r No data")
+            ALC.safe_csa("|c00FFFFNo data|r", 90)
+        else
+            d("|c00FFFF[ALC Profiler Full Results]|r")
+            for i, mod in ipairs(p_data) do
+                local formatted = ALC.format_time(mod.peak)
+                local color = ALC.get_profiler_color(mod.peak)
+                d(string.format("  %d. %s |c%s[%s]|r", i, formatted, color, mod.name))
+            end
+            
+            local top = p_data[1]
+            local formatted = ALC.format_time(top.peak)
+            local color = ALC.get_profiler_color(top.peak)
+            local msg = string.format("|c00FFFFTop Load:|r %s |c%s[%s]|r", formatted, color, top.name)
+            ALC.safe_csa(msg, 90)
+        end
+        
+        if ALC.settings.show_session_ui then ALC.update_history_text() end
+        if ALC.profiler_timer_lbl then ALC.profiler_timer_lbl:SetText("") end
+    end
+
+    if IsUnitInCombat and IsUnitInCombat("player") then
+        if ALC.profiler_timer_lbl then ALC.profiler_timer_lbl:SetText("Waiting...") end
+        d("|c00FFFF[ALC]|r Scan finished. Waiting for combat to end to process data...")
+        EVENT_MANAGER:RegisterForEvent(ALC.name .. "_ProfCom", EVENT_PLAYER_COMBAT_STATE, 
+            function(event_code, in_combat)
+                if not in_combat then
+                    EVENT_MANAGER:UnregisterForEvent(ALC.name .. "_ProfCom", EVENT_PLAYER_COMBAT_STATE)
+                    local cd = 5
+                    if ALC.profiler_timer_lbl then 
+                        ALC.profiler_timer_lbl:SetText(string.format("(%ds)", cd)) 
+                    end
+                    EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_ProfWait", 1000, function()
+                        cd = cd - 1
+                        if ALC.profiler_timer_lbl then 
+                            ALC.profiler_timer_lbl:SetText(string.format("(%ds)", cd)) 
+                        end
+                        if cd <= 0 then
+                            EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_ProfWait")
+                            process_data()
+                        end
+                    end)
+                end
+            end
+        )
+    else
+        process_data()
+    end
 end
 
 function ALC.start_profiler()
@@ -1861,11 +1987,18 @@ function ALC.init(event_code, addon_name)
     )
     ALC.migrate_data()
 
-    local found_lib, found_ver = ALC.get_settings_library()
-    if found_lib == "NONE" and not ALC.settings.has_shown_lib_warning_007 then 
+    local lam_ver, lca_ver = ALC.get_settings_library()
+    lam_ver = lam_ver or 0
+    lca_ver = lca_ver or 0
+
+    local is_lam_ok = (lam_ver >= REQUIRED_LAM_VERSION)
+    ALC.is_lca_valid = (LibCombatAlerts ~= nil and lca_ver >= REQUIRED_LCA_VERSION)
+
+    if (not is_lam_ok or not ALC.is_lca_valid) and not ALC.settings.has_shown_lib_warning_008 then 
         ALC.show_missing_library_warning() 
     end
-    if found_lib == "NONE" or (found_lib == "LAM2" and found_ver < REQUIRED_LAM_VERSION) then 
+
+    if not is_lam_ok then 
         ALC.settings.track_stats = false 
     end
     
@@ -1978,13 +2111,16 @@ function ALC.init(event_code, addon_name)
                 "|c00FFFF/alcstatclean|r |cFFD700- Toggle Session Clean Logs|r\n",
                 "|c00FFFF/alcprofile|r |cFFD700- Toggle Profiler Module|r\n",
                 "|c00FFFF/alcself|r |cFFD700- Toggle ALC in Profiler Scan|r\n",
-                "|c00FFFF/alcstart|r |cFFD700- Start Profiler Scan|r\n",
-                "|c00FFFF/alclibs|r |cFFD700- Toggle Library Filtering|r\n"
+                "|c00FFFF/alclibs|r |cFFD700- Toggle Library Filtering|r\n",
+                "|c00FFFF/alcstart|r |cFFD700- Start 60s Profiler Data Gather|r\n",
+                "|c00FFFF/alcprostop|r |cFFD700- Stop Profiler Scan|r\n",
+                "|c00FFFF/alcprolist|r |cFFD700- List Profiler Results to Chat|r\n",
+                "|c00FFFF/alcdelvars|r |cFFD700- Reset ALL settings to defaults|r\n"
             }
             if not IsConsoleUI() then 
                 table.insert(sl_cmds, "|c00FFFF/alclogs|r |cFFD700- Toggle Chat Logs|r\n") 
             end
-            table.insert(sl_cmds, "|c00FFFF/alcclean|r |cFFD700- Force manual memory cleanup|r")
+            table.insert(sl_cmds, "|c00FFFF/alcclean|r |cFFD700- Force manual Lua cleanup|r")
             
             if CHAT_SYSTEM then 
                 CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r\n" .. table.concat(sl_cmds)) 
@@ -2072,10 +2208,11 @@ function ALC.init(event_code, addon_name)
     
     SLASH_COMMANDS["/alclite"] = function() 
         ALC.settings.lite_mode = not ALC.settings.lite_mode
+        if ALC.settings.lite_mode then ALC.settings.show_graph_diags = true end
         ALC.build_graph_ui() 
     end
     
-    SLASH_COMMANDS["/alcdiags"] = function() 
+    SLASH_COMMANDS["/alcdiags"] = function()
         ALC.settings.show_graph_diags = not ALC.settings.show_graph_diags
         ALC.build_graph_ui() 
     end
@@ -2148,11 +2285,6 @@ function ALC.init(event_code, addon_name)
         d("|c00FFFF[ALC]|r Profiler Logic: " .. tostring(ALC.settings.is_profiler_enabled))
     end
     
-    SLASH_COMMANDS["/alcself"] = function() 
-        ALC.settings.can_profile_self = not ALC.settings.can_profile_self
-        d("|c00FFFF[ALC]|r Scan Self: " .. tostring(ALC.settings.can_profile_self))
-    end
-    
     SLASH_COMMANDS["/alclibs"] = function() 
         ALC.settings.exclude_libs = not ALC.settings.exclude_libs
         d("|c00FFFF[ALC]|r Exclude Libraries filter is now [|cFFFF00" .. 
@@ -2162,16 +2294,53 @@ function ALC.init(event_code, addon_name)
     
     SLASH_COMMANDS["/alcstart"] = function() ALC.start_profiler() end
     
+    SLASH_COMMANDS["/alcprostop"] = function() ALC.stop_profiler() end
+    SLASH_COMMANDS["/alcstop"] = SLASH_COMMANDS["/alcprostop"]
+    
+    SLASH_COMMANDS["/alcprolist"] = function()
+        local p_data = ALC.settings.saved_profiler_data
+        if not p_data or #p_data == 0 or (p_data[1] and p_data[1].name == "None Scanned") then
+            d("|c00FFFF[ALC]|r No data. Run a scan.")
+            return 
+        end
+        d("|c00FFFF[ALC Profiler Full Results]|r")
+        for i, mod in ipairs(p_data) do
+            local formatted = ALC.format_time(mod.peak)
+            local color = ALC.get_profiler_color(mod.peak)
+            d(string.format("  %d. %s |c%s[%s]|r", i, formatted, color, mod.name))
+        end
+    end
+    
+    SLASH_COMMANDS["/alcdelvars"] = function() 
+        d("|cFF0000[ALC] Wiping all settings...|r")
+        local exclude = {
+            total_cleanups = true, total_mb_freed = true, last_session_cleanups = true,
+            last_session_mb_freed = true, prev_session_cleanups = true, prev_session_mb_freed = true,
+            install_date = true, version_history = true, session_history = true,
+            prev_session_perf = true, saved_profiler_data = true, is_migrated_008 = true,
+            has_shown_lib_warning_008 = true, specific_lib_excludes = true,
+            specific_addon_excludes = true
+        }
+        for k, v in pairs(ALC.defaults) do
+            if not exclude[k] then
+                if type(v) == "table" then ALC.settings[k] = ZO_ShallowTableCopy(v)
+                else ALC.settings[k] = v end
+            end
+        end
+        ReloadUI("ingame")
+    end
+    SLASH_COMMANDS["/alcwipe"] = SLASH_COMMANDS["/alcdelvars"]
+    
     SLASH_COMMANDS["/alcstatclean"] = function() 
         ALC.settings.session_track_cleaned = not ALC.settings.session_track_cleaned 
     end
 end
 
 function ALC.build_lam2_menu()
-    local lib_type, lam_ver = ALC.get_settings_library()
-    if lib_type == "NONE" then return end
+    local lam_ver, lca_ver = ALC.get_settings_library()
+    if lam_ver == 0 then return end
 
-    if lib_type == "LAM2" and lam_ver > 0 and lam_ver < REQUIRED_LAM_VERSION then
+    if lam_ver > 0 and lam_ver < REQUIRED_LAM_VERSION then
         zo_callLater(function()
             local warn_msg = string.format(
                 "|cFFFF00Warning: LibAddonMenu is outdated (v%d). Update to v%d+ for ALC.|r", 
@@ -2199,10 +2368,13 @@ function ALC.build_lam2_menu()
         "|c00FFFF/alcsessionreset|r |cFFD700- Reset Session UI|r\n\n",
         "|c00FFFF/alccsa|r |cFFD700- Toggle Announcements|r\n\n",
         "|c00FFFF/alcstats|r |cFFD700- Toggle Saving Statistics|r\n\n",
-        "|c00FFFF/alcprofile|r |cFFD700- Toggle Profiler Module|r\n",
-        "|c00FFFF/alcself|r |cFFD700- Toggle ALC in Profiler Scan|r\n",
-        "|c00FFFF/alclibs|r |cFFD700- Toggle Library Filtering|r\n",
-        "|c00FFFF/alcstart|r |cFFD700- Start 60s Profiler Data Gather|r\n", 
+        "|c00FFFF/alcprofile|r |cFFD700- Toggle Profiler Module|r\n\n",
+        "|c00FFFF/alcself|r |cFFD700- Toggle ALC in Profiler Scan|r\n\n",
+        "|c00FFFF/alclibs|r |cFFD700- Toggle Library Filtering|r\n\n",
+        "|c00FFFF/alcstart|r |cFFD700- Start 60s Profiler Data Gather|r\n\n", 
+        "|c00FFFF/alcprostop|r |cFFD700- Stop Profiler Scan|r\n\n",
+        "|c00FFFF/alcprolist|r |cFFD700- List Profiler Results to Chat|r\n\n",
+        "|c00FFFF/alcdelvars|r |cFFD700- Reset ALL settings to defaults|r\n\n",
         "|c00FFFF/alcclean|r |cFFD700- Force manual Lua cleanup|r"
     }
     
@@ -2234,6 +2406,9 @@ function ALC.build_lam2_menu()
         "|c00FFFF/alcself|r |cFFD700- Toggle ALC in Profiler Scan|r\n",
         "|c00FFFF/alclibs|r |cFFD700- Toggle Library Filtering|r\n",
         "|c00FFFF/alcstart|r |cFFD700- Start 60s Profiler Data Gather|r\n", 
+        "|c00FFFF/alcprostop|r |cFFD700- Stop Profiler Scan|r\n",
+        "|c00FFFF/alcprolist|r |cFFD700- List Profiler Results to Chat|r\n",
+        "|c00FFFF/alcdelvars|r |cFFD700- Reset ALL settings to defaults|r\n",
         "|c00FFFF/alcclean|r |cFFD700- Force manual Lua cleanup|r"
     }
 
@@ -2274,6 +2449,12 @@ function ALC.build_lam2_menu()
     if not is_pad and not is_eu_server then
         table.insert(build_data, { 
             type = "button", 
+            name = "|c00FFFFMANUAL CLEANUP|r", 
+            func = function() ALC.run_manual_cleanup() end, 
+            width = "half" 
+        })
+        table.insert(build_data, { 
+            type = "button", 
             name = "|cFFD700DONATE|r to @|ca500f3A|r|cb400e6P|r|cc300daH|r|cd200cdO|r|ce100c1NlC|r", 
             tooltip = "Opens the in-game mail. Thank you!", 
             func = function() 
@@ -2284,9 +2465,15 @@ function ALC.build_lam2_menu()
                     ZO_MailSendBodyField:TakeFocus() 
                 end, 200) 
             end, 
+            width = "half" 
+        })
+    else
+        table.insert(build_data, { 
+            type = "button", 
+            name = "|c00FFFFMANUAL CLEANUP|r", 
+            func = function() ALC.run_manual_cleanup() end, 
             width = "full" 
         })
-        table.insert(build_data, { type = "divider" })
     end
     
     local menu_w = GetUIPlatform() == UI_PLATFORM_PC and "half" or "full"
@@ -2329,9 +2516,7 @@ function ALC.build_lam2_menu()
         setFunc = function(v) ALC.settings.fallback_delay_sec = v end 
     })
     
-    table.insert(build_data, { type = "divider" })
-    
-    if not is_pad then 
+    if not is_pad then
         table.insert(build_data, { 
             type = "checkbox", 
             name = "Enable Chat Logs", 
@@ -2361,17 +2546,251 @@ function ALC.build_lam2_menu()
     
     table.insert(build_data, { type = "divider" })
     
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Show Memory UI", 
-        getFunc = function() return ALC.settings.show_ui end, 
-        setFunc = function(v) 
-            ALC.settings.show_ui = v
-            ALC.toggle_ui_update() 
-        end 
+    table.insert(build_data, {
+        type = "submenu",
+        name = "|c00FFFFMemory UI|r",
+        controls = {
+            { 
+                type = "checkbox", 
+                name = "Show Memory UI", 
+                getFunc = function() return ALC.settings.show_ui end, 
+                setFunc = function(v) 
+                    ALC.settings.show_ui = v
+                    ALC.toggle_ui_update() 
+                end 
+            },
+            { 
+                type = "checkbox", 
+                name = "Show UI Cleanup Bar", 
+                getFunc = function() return ALC.settings.show_mem_ui_bar end, 
+                setFunc = function(v) 
+                    ALC.settings.show_mem_ui_bar = v
+                    ALC.update_ui_anchor() 
+                end, 
+                disabled = function() return not ALC.settings.show_ui end 
+            }
+        }
+    })
+
+    table.insert(build_data, {
+        type = "submenu",
+        name = "|c00FFFFGraph UI|r",
+        controls = {
+            { 
+                type = "checkbox", 
+                name = "Enable Memory Graph UI", 
+                getFunc = function() return ALC.settings.is_graph_enabled end, 
+                setFunc = function(v) 
+                    ALC.settings.is_graph_enabled = v
+                    ALC.toggle_ui_update() 
+                end, 
+                disabled = function() return not ALC.settings.show_ui end 
+            },
+            { 
+                type = "checkbox", 
+                name = "Show Diagnostics Text", 
+                getFunc = function() return ALC.settings.show_graph_diags end, 
+                setFunc = function(v) 
+                    ALC.settings.show_graph_diags = v
+                    ALC.build_graph_ui() 
+                end, 
+                disabled = function() return not ALC.settings.is_graph_enabled end 
+            },
+            { 
+                type = "checkbox", 
+                name = "Enable [Text Only] Lite Mode", 
+                getFunc = function() return ALC.settings.lite_mode end, 
+                setFunc = function(v) 
+                    ALC.settings.lite_mode = v
+                    if v then ALC.settings.show_graph_diags = true end
+                    ALC.build_graph_ui() 
+                end, 
+                disabled = function() return not ALC.settings.is_graph_enabled end 
+            }
+        }
     })
     
-    table.insert(build_data, { 
+    table.insert(build_data, {
+        type = "submenu",
+        name = "|c00FFFFPrevious Session Logs|r",
+        controls = {
+            { 
+                type = "checkbox", 
+                name = "Log Session History", 
+                getFunc = function() return ALC.settings.is_stats_log_enabled end, 
+                setFunc = function(v) 
+                    ALC.settings.is_stats_log_enabled = v
+                    if v then 
+                        EVENT_MANAGER:RegisterForUpdate("ALC_StatsTick", 60000, function() 
+                            ALC.check_session_peak() 
+                        end) 
+                    else 
+                        EVENT_MANAGER:UnregisterForUpdate("ALC_StatsTick") 
+                    end 
+                end 
+            },
+            {
+                type = "checkbox",
+                name = "Show Session History UI",
+                getFunc = function() return ALC.settings.show_session_ui end,
+                setFunc = function(v)
+                    ALC.settings.show_session_ui = v
+                    ALC.build_session_ui()
+                end
+            },
+            {
+                type = "checkbox",
+                name = "Log Session PEAK Data",
+                tooltip = "Logs the highest spike recorded during your session.",
+                getFunc = function() return ALC.settings.session_track_peak end,
+                setFunc = function(v) ALC.settings.session_track_peak = v end
+            },
+            {
+                type = "checkbox",
+                name = "Log Session AVERAGE Data",
+                tooltip = "Logs the average for your session.",
+                getFunc = function() return ALC.settings.session_track_avg end,
+                setFunc = function(v) ALC.settings.session_track_avg = v end
+            },
+            {
+                type = "checkbox",
+                name = "Log Session FINAL Data",
+                tooltip = "Logs the exact numbers seen right before you reloaded/logged out.",
+                getFunc = function() return ALC.settings.session_track_final end,
+                setFunc = function(v) ALC.settings.session_track_final = v end
+            },
+            {
+                type = "checkbox",
+                name = "Track MemCleaned (Session UI Only)",
+                tooltip = "Logs how much RAM was saved during the session.",
+                getFunc = function() return ALC.settings.session_track_cleaned end,
+                setFunc = function(v) ALC.settings.session_track_cleaned = v end
+            }
+        }
+    })
+    
+    table.insert(build_data, {
+        type = "submenu",
+        name = "|cFFA500Tracking Modules|r",
+        controls = {
+            { type = "checkbox", name = "Track Ping",
+                getFunc = function() return ALC.settings.track_ping end,
+                setFunc = function(v) ALC.settings.track_ping = v end, width = menu_w },
+            { type = "checkbox", name = "Track FPS",
+                getFunc = function() return ALC.settings.track_fps end,
+                setFunc = function(v) ALC.settings.track_fps = v end, width = menu_w },
+            { type = "checkbox", name = "Track Memory Gains",
+                getFunc = function() return ALC.settings.track_memory_gains end,
+                setFunc = function(v) ALC.settings.track_memory_gains = v end, width = menu_w },
+            { type = "checkbox", name = "Track Frametime",
+                getFunc = function() return ALC.settings.track_frametime end,
+                setFunc = function(v) ALC.settings.track_frametime = v end, width = menu_w }
+        }
+    })
+    
+    table.insert(build_data, {
+        type = "submenu",
+        name = "|cFFA500Profiler Modules|r",
+        controls = {
+            {
+                type = "checkbox",
+                name = "Enable Profiler Logic",
+                getFunc = function() return ALC.settings.is_profiler_enabled end,
+                setFunc = function(v) ALC.settings.is_profiler_enabled = v end
+            },
+            {
+                type = "checkbox",
+                name = "Include ALC in Scan",
+                getFunc = function() return ALC.settings.can_profile_self end,
+                setFunc = function(v) ALC.settings.can_profile_self = v end,
+                disabled = function() return not ALC.settings.is_profiler_enabled end
+            },
+            {
+                type = "checkbox",
+                name = "Include ESOProfiler in Scan",
+                tooltip = "Include ESOProfiler's resources. Default is OFF (excluded).",
+                getFunc = function() return ALC.settings.include_esoprofiler end,
+                setFunc = function(v) ALC.settings.include_esoprofiler = v end,
+                disabled = function() return not ALC.settings.is_profiler_enabled end
+            },
+            {
+                type = "checkbox",
+                name = "Exclude Libraries from Scan",
+                tooltip = "Excludes standard 'Lib' dependencies from top load calculations.",
+                getFunc = function() return ALC.settings.exclude_libs end,
+                setFunc = function(v) ALC.settings.exclude_libs = v end,
+                disabled = function() return not ALC.settings.is_profiler_enabled end
+            },
+            {
+                type = "button", name = "|cFF0000START 60s PROFILER|r",
+                tooltip = "Start the data gather now.",
+                func = function() ALC.start_profiler() end, width = "full",
+                disabled = function() return not ALC.settings.is_profiler_enabled end
+            }
+        }
+    })
+
+    local am = GetAddOnManager()
+    local libs_found, addons_found = {}, {}
+    for i = 1, am:GetNumAddOns() do
+        local addon_name, _, _, _, _, state = am:GetAddOnInfo(i)
+        if state == ADDON_STATE_ENABLED then
+            if string.find(addon_name:lower(), "lib") then
+                table.insert(libs_found, addon_name)
+            else
+                table.insert(addons_found, addon_name)
+            end
+        end
+    end
+    table.sort(libs_found); table.sort(addons_found)
+
+    local lib_controls = {}
+    for _, l_name in ipairs(libs_found) do
+        table.insert(lib_controls, {
+            type = "checkbox", name = l_name,
+            getFunc = function() return ALC.settings.specific_lib_excludes[l_name] or false end,
+            setFunc = function(v) ALC.settings.specific_lib_excludes[l_name] = v end,
+            disabled = function() return not ALC.settings.is_profiler_enabled end
+        })
+    end
+    table.insert(build_data, {
+        type = "submenu", name = "|cFFFF00Specific Library Exclusions|r",
+        tooltip = "Select specific libraries to exclude from the scan results.",
+        controls = lib_controls
+    })
+
+    local addon_controls = {}
+    for _, a_name in ipairs(addons_found) do
+        table.insert(addon_controls, {
+            type = "checkbox", name = a_name,
+            getFunc = function() return ALC.settings.specific_addon_excludes[a_name] or false end,
+            setFunc = function(v) ALC.settings.specific_addon_excludes[a_name] = v end,
+            disabled = function() return not ALC.settings.is_profiler_enabled end
+        })
+    end
+    table.insert(build_data, {
+        type = "submenu", name = "|cFFFF00Specific Addon Exclusions|r",
+        tooltip = "Select specific addons to exclude from the scan results.",
+        controls = addon_controls
+    })
+    
+    local function preview_window(win_ctrl)
+        local cur_scene = SCENE_MANAGER:GetCurrentScene()
+        if not cur_scene then return end
+        
+        local t_frag = nil
+        if win_ctrl == ALC.ui_window then t_frag = ALC.hud_fragment
+        elseif win_ctrl == graph_window then t_frag = ALC.graph_fragment
+        elseif win_ctrl == session_window then t_frag = ALC.session_fragment end
+        
+        if t_frag and cur_scene:HasFragment(t_frag) then
+            win_ctrl:SetHidden(false)
+        end
+    end
+
+    local ui_pos_controls = {}
+
+    table.insert(ui_pos_controls, { 
         type = "checkbox", 
         name = "Render Memory UI in Menus", 
         getFunc = function() return ALC.settings.is_ui_global end, 
@@ -2381,62 +2800,21 @@ function ALC.build_lam2_menu()
         end, 
         disabled = function() return not ALC.settings.show_ui end 
     })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Lock UI Position", 
-        getFunc = function() return ALC.settings.is_ui_locked end, 
-        setFunc = function(v) 
+
+    table.insert(ui_pos_controls, {
+        type = "checkbox",
+        name = "Lock Memory UI Position",
+        getFunc = function() return ALC.settings.is_ui_locked end,
+        setFunc = function(v)
             ALC.settings.is_ui_locked = v
-            if ALC.ui_window then ALC.ui_window:SetMovable(not v) end 
-        end, 
-        disabled = function() return not ALC.settings.show_ui end 
+            if ALC.ui_window then ALC.ui_window:SetMovable(not v) end
+        end,
+        disabled = function() return not ALC.settings.show_ui end
     })
-    
-    table.insert(build_data, { 
-        type = "button", 
-        name = "|cFF0000RESET UI POSITION|r", 
-        func = function() 
-            ALC.settings.ui_x = nil
-            ALC.settings.ui_y = nil
-            ALC.update_ui_anchor()
-            if ALC.settings.is_log_enabled and CHAT_SYSTEM then 
-                CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r UI Position Reset.") 
-            end 
-        end, 
-        disabled = function() return not ALC.settings.show_ui end 
-    })
-    
-    table.insert(build_data, { 
+
+    table.insert(ui_pos_controls, { 
         type = "checkbox", 
-        name = "Enable Memory Graph", 
-        getFunc = function() return ALC.settings.is_graph_enabled end, 
-        setFunc = function(v) 
-            ALC.settings.is_graph_enabled = v
-            ALC.toggle_ui_update() 
-        end, 
-        disabled = function() return not ALC.settings.show_ui end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Log Session History", 
-        getFunc = function() return ALC.settings.is_stats_log_enabled end, 
-        setFunc = function(v) 
-            ALC.settings.is_stats_log_enabled = v
-            if v then 
-                EVENT_MANAGER:RegisterForUpdate("ALC_StatsTick", 60000, function() 
-                    ALC.check_session_peak() 
-                end) 
-            else 
-                EVENT_MANAGER:UnregisterForUpdate("ALC_StatsTick") 
-            end 
-        end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Render Graph in Menus", 
+        name = "Render Graph UI in Menus", 
         getFunc = function() return ALC.settings.is_graph_global end, 
         setFunc = function(v) 
             ALC.settings.is_graph_global = v
@@ -2444,337 +2822,118 @@ function ALC.build_lam2_menu()
         end, 
         disabled = function() return not ALC.settings.is_graph_enabled end 
     })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Lock Graph Position", 
-        getFunc = function() return ALC.settings.is_graph_locked end, 
-        setFunc = function(v) 
+
+    table.insert(ui_pos_controls, {
+        type = "checkbox",
+        name = "Lock Graph UI Position",
+        getFunc = function() return ALC.settings.is_graph_locked end,
+        setFunc = function(v)
             ALC.settings.is_graph_locked = v
-            if graph_window then graph_window:SetMovable(not v) end 
-        end, 
-        disabled = function() return not ALC.settings.is_graph_enabled end 
+            if graph_window then graph_window:SetMovable(not v) end
+        end,
+        disabled = function() return not ALC.settings.is_graph_enabled end
+    })
+
+    table.insert(ui_pos_controls, {
+        type = "checkbox",
+        name = "Render Session UI in Menus",
+        getFunc = function() return ALC.settings.is_session_global end,
+        setFunc = function(v)
+            ALC.settings.is_session_global = v
+            ALC.update_ui_scenes()
+        end,
+        disabled = function() return not ALC.settings.show_session_ui end
+    })
+
+    table.insert(ui_pos_controls, {
+        type = "checkbox",
+        name = "Lock Session UI Position",
+        getFunc = function() return ALC.settings.is_session_locked end,
+        setFunc = function(v)
+            ALC.settings.is_session_locked = v
+            if session_window then session_window:SetMovable(not v) end
+        end,
+        disabled = function() return not ALC.settings.show_session_ui end
+    })
+
+    if is_pad and ALC.is_lca_valid then
+        table.insert(ui_pos_controls, { 
+            type = "button", name = "Move Memory UI", width = "half",
+            func = function() 
+                preview_window(ALC.ui_window)
+                if ALC.ui_mover then ALC.ui_mover:ToggleGamepadMove(true) end
+            end,
+            disabled = function() return ALC.ui_mover == nil end
+        })
+    end
+    table.insert(ui_pos_controls, { 
+        type = "button", name = "|cFF0000RESET MEMORY POS|r", width = "half",
+        func = function() 
+            ALC.settings.ui_x = nil
+            ALC.settings.ui_y = nil
+            ALC.update_ui_anchor() 
+            preview_window(ALC.ui_window)
+            if ALC.settings.is_log_enabled and CHAT_SYSTEM then 
+                CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Memory UI Position Reset.") 
+            end 
+        end,
+        disabled = function() return not ALC.settings.show_ui end
     })
     
-    table.insert(build_data, { 
-        type = "button", 
-        name = "|cFF0000RESET GRAPH POSITION|r", 
+    if is_pad and ALC.is_lca_valid then
+        table.insert(ui_pos_controls, { 
+            type = "button", name = "Move Graph UI", width = "half",
+            func = function() 
+                preview_window(graph_window)
+                if ALC.graph_mover then ALC.graph_mover:ToggleGamepadMove(true) end
+            end,
+            disabled = function() return ALC.graph_mover == nil end
+        })
+    end
+    table.insert(ui_pos_controls, { 
+        type = "button", name = "|cFF0000RESET GRAPH POS|r", width = "half",
         func = function() 
             ALC.settings.graph_x = nil
             ALC.settings.graph_y = nil
             ALC.settings.is_graph_detached = false
-            if graph_window and ALC.ui_window then 
-                graph_window:ClearAnchors()
-                graph_window:SetAnchor(TOPLEFT, ALC.ui_window, BOTTOMLEFT, 0, 5) 
-            end
+            ALC.update_graph_anchor() 
+            preview_window(graph_window)
             if CHAT_SYSTEM then 
-                CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Graph Position Reset.") 
+                CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Graph UI Position Reset.") 
             end 
-        end, 
-        disabled = function() return not ALC.settings.is_graph_enabled end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Show Diagnostics Text", 
-        getFunc = function() return ALC.settings.show_graph_diags end, 
-        setFunc = function(v) 
-            ALC.settings.show_graph_diags = v
-            ALC.build_graph_ui() 
-        end, 
-        disabled = function() return not ALC.settings.is_graph_enabled end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Enable [Text Only] Lite Mode", 
-        getFunc = function() return ALC.settings.lite_mode end, 
-        setFunc = function(v) 
-            ALC.settings.lite_mode = v
-            ALC.build_graph_ui() 
-        end, 
-        disabled = function() return not ALC.settings.is_graph_enabled end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Show UI Percentage Bar", 
-        getFunc = function() return ALC.settings.show_mem_ui_bar end, 
-        setFunc = function(v) 
-            ALC.settings.show_mem_ui_bar = v
-            ALC.update_ui_anchor() 
-        end, 
-        disabled = function() return not ALC.settings.show_ui end 
-    })
-    
-    table.insert(build_data, { type = "divider" })
-    table.insert(build_data, { type = "header", name = "|c00FFFFPrevious Session Tracker|r" })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Show Session History UI", 
-        getFunc = function() return ALC.settings.show_session_ui end, 
-        setFunc = function(v) 
-            ALC.settings.show_session_ui = v
-            ALC.build_session_ui() 
-        end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Render Session UI in Menus", 
-        getFunc = function() return ALC.settings.is_session_global end, 
-        setFunc = function(v) 
-            ALC.settings.is_session_global = v
-            ALC.update_ui_scenes() 
-        end, 
-        disabled = function() return not ALC.settings.show_session_ui end 
+        end,
+        disabled = function() return not ALC.settings.is_graph_enabled end
     })
 
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Lock Session UI Position", 
-        getFunc = function() return ALC.settings.is_session_locked end, 
-        setFunc = function(v) 
-            ALC.settings.is_session_locked = v
-            if session_window then session_window:SetMovable(not v) end 
-        end, 
-        disabled = function() return not ALC.settings.show_session_ui end 
-    })
-    
-    table.insert(build_data, { 
-        type = "button", 
-        name = "|cFF0000RESET SESSION UI|r", 
+    if is_pad and ALC.is_lca_valid then
+        table.insert(ui_pos_controls, { 
+            type = "button", name = "Move Session UI", width = "half",
+            func = function() 
+                preview_window(session_window)
+                if ALC.session_mover then ALC.session_mover:ToggleGamepadMove(true) end
+            end,
+            disabled = function() return ALC.session_mover == nil end
+        })
+    end
+    table.insert(ui_pos_controls, { 
+        type = "button", name = "|cFF0000RESET SESSION POS|r", width = "half",
         func = function() 
             ALC.settings.session_ui_x = nil
             ALC.settings.session_ui_y = nil
             ALC.update_session_anchor() 
-        end, 
-        disabled = function() return not ALC.settings.show_session_ui end 
+            preview_window(session_window)
+            if ALC.settings.is_log_enabled and CHAT_SYSTEM then 
+                CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r Session UI Position Reset.") 
+            end
+        end,
+        disabled = function() return not ALC.settings.show_session_ui end
     })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Log Session PEAK Data", 
-        tooltip = "Logs the highest spike recorded during your session.", 
-        getFunc = function() return ALC.settings.session_track_peak end, 
-        setFunc = function(v) ALC.settings.session_track_peak = v end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Log Session AVERAGE Data", 
-        tooltip = "Logs the average for your session.", 
-        getFunc = function() return ALC.settings.session_track_avg end, 
-        setFunc = function(v) ALC.settings.session_track_avg = v end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Log Session FINAL Data", 
-        tooltip = "Logs the exact numbers seen right before you reloaded/logged out.", 
-        getFunc = function() return ALC.settings.session_track_final end, 
-        setFunc = function(v) ALC.settings.session_track_final = v end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Track MemCleaned (Session UI Only)", 
-        tooltip = "Logs how much RAM was saved during the session.", 
-        getFunc = function() return ALC.settings.session_track_cleaned end, 
-        setFunc = function(v) ALC.settings.session_track_cleaned = v end 
-    })
-    
-    table.insert(build_data, { type = "divider" })
-    table.insert(build_data, { type = "header", name = "|cFFA500Tracking Modules|r" })
-    
-    table.insert(build_data, { type = "checkbox", name = "Track Ping", 
-        getFunc = function() return ALC.settings.track_ping end, 
-        setFunc = function(v) ALC.settings.track_ping = v end, width = menu_w })
-        
-    table.insert(build_data, { type = "checkbox", name = "Track FPS", 
-        getFunc = function() return ALC.settings.track_fps end, 
-        setFunc = function(v) ALC.settings.track_fps = v end, width = menu_w })
-        
-    table.insert(build_data, { type = "checkbox", name = "Track Memory Gains", 
-        getFunc = function() return ALC.settings.track_memory_gains end, 
-        setFunc = function(v) ALC.settings.track_memory_gains = v end, width = menu_w })
-        
-    table.insert(build_data, { type = "checkbox", name = "Track Frametime", 
-        getFunc = function() return ALC.settings.track_frametime end, 
-        setFunc = function(v) ALC.settings.track_frametime = v end, width = menu_w })
-    
-    table.insert(build_data, { type = "divider" })
-    table.insert(build_data, { type = "header", name = "|c00FFFFProfiler Modules|r" })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Enable Profiler Logic",
-        getFunc = function() return ALC.settings.is_profiler_enabled end, 
-        setFunc = function(v) ALC.settings.is_profiler_enabled = v end 
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Include ALC in Scan",
-        getFunc = function() return ALC.settings.can_profile_self end, 
-        setFunc = function(v) ALC.settings.can_profile_self = v end,
-        disabled = function() return not ALC.settings.is_profiler_enabled end
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Include ESOProfiler in Scan",
-        tooltip = "Include ESOProfiler's resources. Default is OFF (excluded).",
-        getFunc = function() return ALC.settings.include_esoprofiler end, 
-        setFunc = function(v) ALC.settings.include_esoprofiler = v end,
-        disabled = function() return not ALC.settings.is_profiler_enabled end
-    })
-    
-    table.insert(build_data, { 
-        type = "checkbox", 
-        name = "Exclude Libraries from Scan",
-        tooltip = "Excludes standard 'Lib' dependencies from top load calculations.",
-        getFunc = function() return ALC.settings.exclude_libs end, 
-        setFunc = function(v) ALC.settings.exclude_libs = v end,
-        disabled = function() return not ALC.settings.is_profiler_enabled end
-    })
-    
-    local curThresholdLBL = "."
-    table.insert(build_data, { 
-        type = "button", 
-        name = "|cFF0000START 60s PROFILER|r", 
-        tooltip = "Start the data gather now " .. curThresholdLBL,
-        func = function() ALC.start_profiler() end, 
-        width = "full",
-        disabled = function() return not ALC.settings.is_profiler_enabled end
-    })
-    
-    table.insert(build_data, { type = "divider" })
-    
-    table.insert(build_data, { 
-        type = "button", 
-        name = "|c00FFFFMANUAL CLEANUP|r", 
-        func = function() ALC.run_manual_cleanup() end, 
-        width = "full" 
-    })
-    
-    table.insert(build_data, { type = "divider" })
-    
-    table.insert(build_data, { 
-            type = "button", 
-            name = "|cFFD700UNLOCK UI POSITIONING|r", 
-            tooltip = "Allows you to freely drag the Memory, Graph, and Session UIs around the screen.",
-            func = function() ALC.unlock_ui() end, 
-            width = "full" 
-        })
-        
-        table.insert(build_data, { 
-            type = "button", 
-            name = "|cFF0000LOCK UI POSITIONING|r", 
-            tooltip = "Manually locks UI positioning and removes all highlights.",
-            func = function() ALC.lock_ui(true) end, 
-            width = "full",
-            disabled = function() return not ALC.is_ui_unlocked end
-        })
-        
-    
-    if IsConsoleUI() then
-        local screen_w, screen_h = GuiRoot:GetDimensions()
-        table.insert(build_data, { type = "divider" })
-        table.insert(build_data, { type = "header", name = "|c00FFFFConsole Positioning Sliders|r" })
-        
-        local function preview_window(win_ctrl)
-            if win_ctrl then win_ctrl:SetHidden(false) end
-        end
 
-        table.insert(build_data, { 
-            type = "button", name = "Center Memory UI", width = "full",
-            func = function() 
-                ALC.settings.ui_x = (screen_w / 2) - 75
-                ALC.settings.ui_y = (screen_h / 2) - 20
-                ALC.update_ui_anchor() 
-                preview_window(ALC.ui_window)
-            end 
-        })
-        table.insert(build_data, { 
-            type = "slider", name = "Memory UI X", min = 0, max = math.floor(screen_w), step = 1,
-            getFunc = function() return ALC.settings.ui_x or 0 end,
-            setFunc = function(v) 
-                ALC.settings.ui_x = v
-                ALC.update_ui_anchor()
-                preview_window(ALC.ui_window)
-            end,
-        })
-        table.insert(build_data, { 
-            type = "slider", name = "Memory UI Y", min = 0, max = math.floor(screen_h), step = 1,
-            getFunc = function() return ALC.settings.ui_y or 0 end,
-            setFunc = function(v) 
-                ALC.settings.ui_y = v
-                ALC.update_ui_anchor()
-                preview_window(ALC.ui_window)
-            end,
-        })
-        
-        table.insert(build_data, { 
-            type = "button", name = "Center Graph UI", width = "full",
-            func = function() 
-                ALC.settings.graph_x = (screen_w / 2) - 180
-                ALC.settings.graph_y = (screen_h / 2) - 115
-                ALC.settings.is_graph_detached = true
-                ALC.update_graph_anchor() 
-                preview_window(graph_window)
-            end 
-        })
-        table.insert(build_data, { 
-            type = "slider", name = "Graph UI X", min = 0, max = math.floor(screen_w), step = 1,
-            getFunc = function() return ALC.settings.graph_x or 0 end,
-            setFunc = function(v) 
-                ALC.settings.graph_x = v
-                ALC.settings.is_graph_detached = true
-                ALC.update_graph_anchor()
-                preview_window(graph_window)
-            end,
-        })
-        table.insert(build_data, { 
-            type = "slider", name = "Graph UI Y", min = 0, max = math.floor(screen_h), step = 1,
-            getFunc = function() return ALC.settings.graph_y or 0 end,
-            setFunc = function(v) 
-                ALC.settings.graph_y = v
-                ALC.settings.is_graph_detached = true
-                ALC.update_graph_anchor()
-                preview_window(graph_window)
-            end,
-        })
-
-        table.insert(build_data, { 
-            type = "button", name = "Center Session UI", width = "full",
-            func = function() 
-                ALC.settings.session_ui_x = (screen_w / 2) - 350
-                ALC.settings.session_ui_y = (screen_h / 2) - 125
-                ALC.update_session_anchor() 
-                preview_window(session_window)
-            end 
-        })
-        table.insert(build_data, { 
-            type = "slider", name = "Session UI X", min = 0, max = math.floor(screen_w), step = 1,
-            getFunc = function() return ALC.settings.session_ui_x or 0 end,
-            setFunc = function(v) 
-                ALC.settings.session_ui_x = v
-                ALC.update_session_anchor()
-                preview_window(session_window)
-            end,
-        })
-        table.insert(build_data, { 
-            type = "slider", name = "Session UI Y", min = 0, max = math.floor(screen_h), step = 1,
-            getFunc = function() return ALC.settings.session_ui_y or 0 end,
-            setFunc = function(v) 
-                ALC.settings.session_ui_y = v
-                ALC.update_session_anchor()
-                preview_window(session_window)
-            end,
-        })
-    end
+    table.insert(build_data, {
+        type = "submenu",
+        name = "|c00FFFFConfigure UI Positions|r",
+        controls = ui_pos_controls
+    })
     
     if not is_pad then
         local live_stats = {
@@ -2790,6 +2949,36 @@ function ALC.build_lam2_menu()
             } 
         }
         table.insert(build_data, live_stats)
+        
+        local profiler_results = {
+            type = "submenu", 
+            name = "ALC Profiler Results", 
+            controls = { 
+                { 
+                    type = "description", 
+                    title = "|c00FFFFScanned Addons & Libraries|r", 
+                    text = function()
+                        local p_data = ALC.settings.saved_profiler_data
+                        local fallback = "NO SCANNED DATA START 60S PROFILER FIRST."
+                        if not p_data or #p_data == 0 then return fallback end
+                        if p_data[1] and p_data[1].name == "None Scanned" then return fallback end
+                        
+                        local lines = {}
+                        for i, mod in ipairs(p_data) do
+                            local formatted = ALC.format_time(mod.peak)
+                            local color = ALC.get_profiler_color(mod.peak)
+                            table.insert(lines, string.format(
+                                "  %d. %s |c%s[%s]|r", 
+                                i, formatted, color, mod.name
+                            ))
+                        end
+                        return table.concat(lines, "\n")
+                    end
+                } 
+            } 
+        }
+        table.insert(build_data, profiler_results)
+        
         table.insert(build_data, { 
             type = "description", 
             title = "Commands Info", 
@@ -2799,7 +2988,35 @@ function ALC.build_lam2_menu()
     
     table.insert(build_data, { type = "divider" })
     
+    local function ResetToDefaults()
+        local exclude = {
+            total_cleanups = true, total_mb_freed = true, last_session_cleanups = true,
+            last_session_mb_freed = true, prev_session_cleanups = true, prev_session_mb_freed = true,
+            install_date = true, version_history = true, session_history = true,
+            prev_session_perf = true, saved_profiler_data = true, is_migrated_008 = true,
+            has_shown_lib_warning_008 = true, specific_lib_excludes = true,
+            specific_addon_excludes = true
+        }
+        for k, v in pairs(ALC.defaults) do
+            if not exclude[k] then
+                if type(v) == "table" then
+                    ALC.settings[k] = ZO_ShallowTableCopy(v)
+                else
+                    ALC.settings[k] = v
+                end
+            end
+        end
+        ReloadUI("ingame")
+    end
+
     if is_pad then
+        table.insert(build_data, { 
+            type = "button", 
+            name = "|cFF0000RESET TO DEFAULTS|r", 
+            tooltip = "|cFF0000RESETS ALL SETTINGS TO DEFAULT VALUES.|r",
+            func = ResetToDefaults, 
+            width = "full" 
+        })
         table.insert(build_data, { 
             type = "button", 
             name = "|cFFD700Buy Me A Coffee|r", 
@@ -2815,6 +3032,13 @@ function ALC.build_lam2_menu()
             width = "full" 
         })
     else
+        table.insert(build_data, { 
+            type = "button", 
+            name = "|cFF0000RESET TO DEFAULTS|r", 
+            tooltip = "|cFF0000RESETS ALL SETTINGS TO DEFAULT VALUES.|r",
+            func = ResetToDefaults, 
+            width = "full" 
+        })
         table.insert(build_data, { 
             type = "button", 
             name = "|cFFD700Buy Me A Coffee|r", 
