@@ -9,10 +9,11 @@ junk during natural breaks.
 </div>
 
 **Optional Dependencies:**
-This addon requires the following optional library to access the settings GUI menu:
-* [LibAddonMenu-2.0](https://www.esoui.com/downloads/info7-LibAddonMenu-2.0.html)
+This addon requires the following optional libraries:
+* [LibAddonMenu-2.0](https://www.esoui.com/downloads/info7-LibAddonMenu-2.0.html) <sub>*(Required for Settings Menu)*</sub>
+* [LibCombatAlerts](https://www.esoui.com/downloads/info2824-LibCombatAlerts.html) <sub>*(Required for Gamepad UI Movement)*</sub>
 
-**Without the Dependencies:** You can still run the addon entirely independent, and control its 
+**Without the Dependencies:** You can still run the addon entirely independent, and control its
 settings via built-in slash commands as a standalone utility.
 
 ---
@@ -53,7 +54,7 @@ playing, such as right after you exit combat or while inside a menu.
 * <a id="feat-support"></a>[![PC & Console Support](https://img.shields.io/badge/PC%20%26%20Console%20Support-forestgreen?style=flat-square)](#feat-support) : Automatically adapts to your hardware specific memory rules. On PC, it helps you stay safely below the 512MB performance "soft limit" to prevent UI lag and stuttering. On Console, it safely monitors the strict 100MB hardware memory pool.
 * <a id="feat-sweep"></a>[![Double-Pass Engine Sweep](https://img.shields.io/badge/Double--Pass%20Engine%20Sweep-forestgreen?style=flat-square)](#feat-sweep) : A dual-pass garbage collection cycle to safely force execution of all pending __gc hooks and ensure orphaned weak tables are properly eradicated from the shared memory pool.
 * <a id="feat-memento"></a>[![PermMemento Integration](https://img.shields.io/badge/PermMemento%20Integration-forestgreen?style=flat-square)](#feat-memento) : Automatically detects [Permanent Memento](https://www.esoui.com/downloads/info4116-PermanentMemento.html) and disables its internal ALC cleaner.
-* <a id="feat-profiler"></a>[![Script Profiler Module](https://img.shields.io/badge/Script%20Profiler%20Module-forestgreen?style=flat-square)](#feat-profiler) : Built-in performance scanner that profiles all active addons over a 60-second window to identify which ones are causing the highest performance spikes.
+* <a id="feat-profiler"></a>[![Script Profiler Module](https://img.shields.io/badge/Script%20Profiler%20Module-forestgreen?style=flat-square)](#feat-profiler) : Built-in performance scanner that profiles all active addons over a 60-second <sub>*(PC)*</sub> or 30-second <sub>*(Console)*</sub> window to identify which ones are causing the highest performance spikes.
 
 <a id="advanced-profiler"></a>
 <div align="center">
@@ -62,11 +63,29 @@ playing, such as right after you exit combat or while inside a menu.
 
 </div>
 
-* <a id="feat-graph"></a>[![Dynamic Visual Graph](https://img.shields.io/badge/Dynamic%20Visual%20Graph-forestgreen?style=flat-square)](#feat-graph) : A detachable, btop-inspired module provides a real-time, 15-second window into your system performance.
-* <a id="feat-lite"></a>[![Lite Mode](https://img.shields.io/badge/Lite%20Mode-forestgreen?style=flat-square)](#feat-lite) : This toggle hides the visual graph, leaving you with a clean, text-only diagnostic overlay that provides all your vital data.
-* <a id="feat-diags"></a>[![Diagnostics](https://img.shields.io/badge/Diagnostics-forestgreen?style=flat-square)](#feat-diags) : Track real-time <kbd>Ping</kbd>, <kbd>FPS</kbd>, <kbd>Frametime</kbd> <sub>*(ms)*</sub>, and <kbd>KB/MB</kbd> memory creep.
-* <a id="feat-baseline"></a>[![Stable Baseline Math](https://img.shields.io/badge/Stable%20Baseline%20Math-forestgreen?style=flat-square)](#feat-baseline) : Analyzes your connection and framerate over 60-second intervals to accurately track true <kbd>FPS Loss</kbd> and <kbd>Ping Spikes</kbd>.
-* <a id="feat-session"></a>[![Previous Session Tracker](https://img.shields.io/badge/Previous%20Session%20Tracker-forestgreen?style=flat-square)](#feat-session) : A detachable UI that saves data upon logout or UI reload. Tracks <kbd>Peak</kbd>, <kbd>Average</kbd>, <kbd>Final</kbd>, and total <kbd>MemCleaned</kbd>.
+* <a id="feat-graph"></a>[![Dynamic Visual Graph](https://img.shields.io/badge/Dynamic%20Visual%20Graph-forestgreen?style=flat-square)](#feat-graph) : A detachable, btop inspired module provides a real-time, 15 second window into your system performance. Updating every 250ms, the glowing LED style line dynamically color shifts as you approach your memory threshold for intuitive, at-a-glance monitoring.
+* <a id="feat-lite"></a>[![Lite Mode](https://img.shields.io/badge/Lite%20Mode-forestgreen?style=flat-square)](#feat-lite) : This toggle hides the visual graph, leaving you with a clean, text only diagnostic overlay that provides all your vital data.
+* <a id="feat-baseline"></a>[![Stable Baseline Math](https://img.shields.io/badge/Stable%20Baseline%20Math-forestgreen?style=flat-square)](#feat-baseline) : Analyzes your connection and framerate over 60-second intervals to calculate "FPS Loss" and "Ping Spikes".
+* <a id="feat-session"></a>[![Previous Session Tracker](https://img.shields.io/badge/Previous%20Session%20Tracker-forestgreen?style=flat-square)](#feat-session) : A detachable UI that saves performance data every time you log out or reload your UI. Can track session <kbd>Peak</kbd> (Red), <kbd>Average</kbd> (Orange), <kbd>Final/Last-Seen Values</kbd> (White), and total <kbd>MemCleaned</kbd> per session (Cyan).
+
+**Legend <sub>*(Symbol Key)*</sub>:**
+**<** Less than <sub>*(under)*</sub> | **<=** Less than or equal to <sub>*(maximum)*</sub> | **>** Greater than <sub>*(over)*</sub> | **>=** Greater than or equal to <sub>*(at least)*</sub> | **+** And above <sub>*(e.g., 500+ means 500 or more)*</sub>
+
+* <a id="feat-diags"></a>[![Diagnostics Tracking](https://img.shields.io/badge/Diagnostics%20Tracking-forestgreen?style=flat-square)](#feat-diags) : Track real-time <kbd>Ping</kbd>, <kbd>FPS</kbd>, <kbd>Frametime</kbd> <sub>*(ms)*</sub>, and <kbd>KB/MB</kbd> memory creep. Text dynamically color-shifts by load:
+  * **FPS <sub>*(Current & Avg)*</sub>:** >=50 Green | 30-49 Orange | <30 Red
+  * **FPS Loss <sub>*(Spikes)*</sub>:** 0-5 Green | 6-15 Orange | 16+ Red
+  * **Latency <sub>*(ms)*</sub>:** 0-250 Yellow | 251-375 Deep Pink | 376+ Violet
+  * **Frametime:** <=20ms Dodger Blue | >20ms Cyan
+  * **Total Memory <sub>*(PC/Mac)*</sub>:** <320MB Green | 320-511MB Orange | 512MB+ Red
+  * **Total Memory <sub>*(Console)*</sub>:** <60MB Green | 60-99MB Orange | 100MB+ Red
+  * **Avg KB / MB Gains:** KB is static Magenta. MB matches your Total Memory color.
+* <a id="feat-profscale"></a>[![Profiler Scan Severity Scale](https://img.shields.io/badge/Profiler%20Scan%20Severity%20Scale-forestgreen?style=flat-square)](#feat-profscale) : Built-in script profiler dynamically colors scanned addons based on their actual millisecond execution time to help identify lag:
+  * **[Top] Severe Load <sub>*(500+ ms)*</sub>:** Red
+  * **[High] Noticeable Load <sub>*(100 ms to 499 ms)*</sub>:** Orange
+  * **[Moderate] Moderate Load <sub>*(20 ms to 99 ms)*</sub>:** Yellow
+  * **[Low] Normal Load <sub>*(5 ms to 19 ms)*</sub>:** Green
+  * **[Very Low] Fast Execution Load <sub>*(1 ms to 4 ms)*</sub>:** White
+  * **[Bottom] Negligible Load <sub>*(< 1 ms)*</sub>:** Gray
 
 <a id="usage"></a>
 <div align="center">
@@ -99,8 +118,12 @@ playing, such as right after you exit combat or while inside a menu.
 * <kbd>/alcfps</kbd> • <kbd>/alcping</kbd> • <kbd>/alcframetime</kbd> • <kbd>/alcgains</kbd> : Performance tracking
 * <kbd>/alcsession</kbd> • <kbd>/alcsessionlock</kbd> • <kbd>/alcsessionreset</kbd> : Session UI
 * <kbd>/alcstatpeak</kbd> • <kbd>/alcstatavg</kbd> • <kbd>/alcstatfinal</kbd> • <kbd>/alcstatclean</kbd> : Log toggles
+* <kbd>/alccsa</kbd> : Toggle Announcements
+* <kbd>/alclogs</kbd> <sub>*(PC Only)*</sub> : Toggle Chat Logs
 * <kbd>/alcstats</kbd> : Toggle Saving Statistics
-* <kbd>/alcprofile</kbd> • <kbd>/alcself</kbd> • <kbd>/alclibs</kbd> • <kbd>/alcstart</kbd> : Profiler controls
+* <kbd>/alcprofile</kbd> • <kbd>/alcself</kbd> • <kbd>/alclibs</kbd> : Profiler toggles & filters
+* <kbd>/alcstart</kbd> • <kbd>/alcprostop</kbd> • <kbd>/alcprolist</kbd> : Profiler scan controls <sub>*(60s PC / 30s Console)*</sub>
+* <kbd>/alcdelvars</kbd> : Reset ALL settings to defaults
 * <kbd>/alcclean</kbd> : Force manual Lua memory cleanup
 
 ---
@@ -125,7 +148,7 @@ threshold-based sweeping rather than passive monitoring.
 > [!NOTE]
 > **Do You Actually Need This <sub>*(PC & Console)*</sub>?**
 > **NO.** If your total Lua memory usage consistently stays below 300 MB on PC 
-> <sub>*(with an SSD)*</sub>, or below 85 MB on Console, the native ESO logic is 
+> <sub>*(with an SSD)*</sub>, or below 70 MB on Console, the native ESO logic is 
 > usually efficient enough on its own.
 
 **TESTED:** I have personally stress tested this addon while having 335+ active addons 
