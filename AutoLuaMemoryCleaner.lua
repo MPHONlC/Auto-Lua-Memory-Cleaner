@@ -3,12 +3,16 @@
 -- Copyright 2025-2026 @APHONlC
 -- Licensed under the Apache License, Version 2.0.
 
--- NOT TESTED: 2026-03-18 | Pre-Release v0.0.8 | APIVersion: 101049 | LAM2 v41
-local is_release_build = false
+-- TESTED: 2026-03-26 | Release v0.0.8 | APIVersion: 101049 | LAM2 v41
+local is_release_build = true
 local REQUIRED_LAM_VERSION = 41
 local REQUIRED_LCA_VERSION = 7060
 local stat_fps_total = 0
 local stat_fps_count = 0
+
+local function IsConsoleUI()
+    return IsInGamepadPreferredMode()
+end
 
 local ALC = {
     name = "AutoLuaMemoryCleaner",
@@ -16,7 +20,7 @@ local ALC = {
     defaults = {
         is_enabled = true,
         threshold_pc = 400,
-        threshold_console = 70,
+        threshold_console = 60,
         fallback_delay_sec = 300,
         is_csa_enabled = true,
         is_log_enabled = false,
@@ -175,8 +179,11 @@ function ALC.format_time(ms_val)
 end
 
 function ALC.get_hybrid_memory_data()
-    if IsConsoleUI() then return GetTotalUserAddOnMemoryPoolUsageMB() end
     return collectgarbage("count") / 1024
+end
+
+function ALC.get_console_pool_mb()
+    return GetTotalUserAddOnMemoryPoolUsageMB() or 0
 end
 
 function ALC.get_alc_color(val, is_spike_mb)
@@ -241,15 +248,110 @@ end
 
 function ALC.get_settings_library()
     local am = GetAddOnManager()
-    local lam_ver, lca_ver = 0, 0
+    local lam_v, lam_e = 0, false
+    local lca_v, lca_e = 0, false
     for i = 1, am:GetNumAddOns() do
         local name, _, _, _, _, state = am:GetAddOnInfo(i)
-        if state == ADDON_STATE_ENABLED then
-            if name == "LibAddonMenu-2.0" then lam_ver = am:GetAddOnVersion(i) end
-            if name == "LibCombatAlerts" then lca_ver = am:GetAddOnVersion(i) end
+        local is_en = (state == ADDON_STATE_ENABLED)
+        if name == "LibAddonMenu-2.0" then
+            local v = am:GetAddOnVersion(i)
+            if is_en then
+                lam_v = math.max(lam_v, v); lam_e = true
+            elseif not lam_e then
+                lam_v = math.max(lam_v, v)
+            end
+        end
+        if name == "LibCombatAlerts" then
+            local v = am:GetAddOnVersion(i)
+            if is_en then
+                lca_v = math.max(lca_v, v); lca_e = true
+            elseif not lca_e then
+                lca_v = math.max(lca_v, v)
+            end
         end
     end
-    return lam_ver, lca_ver
+    return lam_v, lam_e, lca_v, lca_e
+end
+
+function ALC.calculate_ram_overhead_recursive(t, seen_map, depth)
+    seen_map = seen_map or {}
+    depth = depth or 0
+    if depth > 20 then return 0, 0, 0, 0 end
+    if seen_map[t] then return 0, 0, 0, 0 end
+    seen_map[t] = true
+    
+    local keys, raw_bytes, total_refs = 0, 0, 0
+    local array_slots, hash_slots, nested_ib = 0, 0, 0
+    local instruction_limit = 0
+
+    for k, v in pairs(t) do
+        instruction_limit = instruction_limit + 1
+        if instruction_limit > 5000 then break end
+
+        keys = keys + 1; total_refs = total_refs + 1
+        
+        if type(k) == "string" then raw_bytes = raw_bytes + #k + 16 end
+        
+        local v_type = type(v)
+        if v_type == "string" then raw_bytes = raw_bytes + #v + 16
+        elseif v_type == "number" then raw_bytes = raw_bytes + 8
+        elseif v_type == "boolean" then raw_bytes = raw_bytes + 8
+        elseif v_type == "table" then
+            local rb, tr, k2, ib2 = ALC.calculate_ram_overhead_recursive(v, seen_map, depth + 1)
+            raw_bytes = raw_bytes + rb; total_refs = total_refs + tr
+            keys = keys + k2; nested_ib = nested_ib + ib2
+        end
+        
+        if type(k) == "number" and k > 0 and k % 1 == 0 then array_slots = array_slots + 1
+        else hash_slots = hash_slots + 1 end
+    end
+    
+    total_refs = total_refs + 1
+    local function next_power_2(n)
+        local p = 1
+        while p < n do p = p * 2 end; return p
+    end
+    
+    local allocated_array_slots = next_power_2(array_slots)
+    local allocated_hash_slots = next_power_2(hash_slots)
+    local invisible_structure_bytes = (allocated_array_slots * 8) + (allocated_hash_slots * 24) + 16 + nested_ib
+    return raw_bytes, total_refs, keys, invisible_structure_bytes
+end
+
+function ALC.get_true_ram_footprint(t)
+    local rb, tr, k, ib = ALC.calculate_ram_overhead_recursive(t, {}, 0)
+    return (rb + (k * 8) + ib)
+end
+
+function ALC.get_high_precision_sv_disk_size(t)
+    local function count_sv_chars_recursive(t, depth, seen)
+        if type(t) ~= "table" or seen[t] or depth > 20 then return 0 end
+        seen[t] = true
+        
+        local chars = 0
+        local instruction_limit = 0
+        for k, v in pairs(t) do
+            instruction_limit = instruction_limit + 1
+            if instruction_limit > 5000 then break end
+
+            chars = chars + (depth * 4)
+            local k_type = type(k)
+            if k_type == "string" then chars = chars + #k + 7
+            elseif k_type == "number" then chars = chars + 10 end
+            
+            local v_type = type(v)
+            if v_type == "string" then chars = chars + #v + 4 
+            elseif v_type == "number" then chars = chars + 10
+            elseif v_type == "boolean" then chars = chars + (v and 4 or 5) + 2
+            elseif v_type == "table" then 
+                chars = chars + 1 + (depth * 4) + 2 
+                chars = chars + count_sv_chars_recursive(v, depth + 1, seen) 
+                chars = chars + (depth * 4) + 3     
+            end
+        end
+        return chars
+    end
+    return count_sv_chars_recursive(t, 1, {}) + 20
 end
 
 function ALC.format_memory(value_mb)
@@ -280,10 +382,27 @@ function ALC.toggle_core_events()
                 if not in_combat then ALC.trigger_memory_check("CombatEnd", 3000) end 
             end
         )
+        EVENT_MANAGER:RegisterForEvent(ALC.name .. "_LowMem", EVENT_LUA_LOW_MEMORY, 
+            function()
+                if IsConsoleUI() then
+                    ALC.run_manual_cleanup()
+                end
+            end
+        )
+        EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_AutoSweep", 5000,
+            function()
+                if not IsPlayerMoving() then
+                    ALC.trigger_memory_check("Idle", 1000)
+                else
+                    ALC.trigger_memory_check("AutoSweep", 0)
+                end
+            end
+        )
         if SCENE_MANAGER and not ALC.is_scene_callback_registered then
             ALC.scene_callback_fn = function(scene, old_state, new_state)
                 if new_state == SCENE_SHOWN then
-                    if scene.name ~= "hud" and scene.name ~= "hudui" then 
+                    local s_name = scene:GetName()
+                    if s_name ~= "hud" and s_name ~= "hudui" and s_name ~= "gamepad_hud" then 
                         ALC.trigger_memory_check("Menu", 6000) 
                     end
                 end
@@ -293,6 +412,9 @@ function ALC.toggle_core_events()
         end
     else
         EVENT_MANAGER:UnregisterForEvent(ALC.name .. "_CombatState", EVENT_PLAYER_COMBAT_STATE)
+        EVENT_MANAGER:UnregisterForEvent(ALC.name .. "_LowMem", EVENT_LUA_LOW_MEMORY)
+        EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_IdleCheck")
+        EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_AutoSweep")
         if SCENE_MANAGER and ALC.is_scene_callback_registered then
             SCENE_MANAGER:UnregisterCallback("SceneStateChanged", ALC.scene_callback_fn)
             ALC.is_scene_callback_registered = false
@@ -415,11 +537,33 @@ function ALC.get_stats_text()
     
     local install_date = ALC.settings.install_date or "Unknown"
     local v_history = table.concat(ALC.settings.version_history or {ALC.version}, ", ")
-    local lib_type, lam_version = ALC.get_settings_library()
-    local lib_text = lib_type == "LAM2" 
-        and string.format("LibAddonMenu (v%d)", lam_version) 
-        or "Not Installed"
-        
+    
+    local lam_ver, lam_en, lca_ver, lca_en = ALC.get_settings_library()
+    
+    local function get_lib_str(ver, en, name, req)
+        if ver == 0 then return string.format("|cFF0000%s (Missing)|r", name) end
+        if not en then return string.format("|cFF0000%s (Disabled - v%d)|r", name, ver) end
+        if ver < req then return string.format("|cFF0000%s (v%d) (PLEASE UPDATE %s TO v%d)|r", name, ver, name, req) end
+        return string.format("|c00FF00%s (v%d)|r", name, ver)
+    end
+    
+    local lib_text = get_lib_str(lam_ver, lam_en, "LAM2", REQUIRED_LAM_VERSION) .. " | " .. get_lib_str(lca_ver, lca_en, "LCA", REQUIRED_LCA_VERSION)
+    
+    local pc_data_str = ""
+    if not IsConsoleUI() then
+        local mem_raw = ALC.get_true_ram_footprint(ALC)
+        local mem_mb = mem_raw / (1024 * 1024)
+        local mem_kb = mem_raw / 1024
+        local mem_str = (mem_mb >= 1) and string.format("%.2f MB", mem_mb) or string.format("%.2f KB", mem_kb)
+        local sv_prec_bytes = ALC.get_high_precision_sv_disk_size(_G["AutoLuaCleaner"] or {})
+        local sv_size_kb = sv_prec_bytes / 1024
+        local sv_size_mb = sv_size_kb / 1024
+        local sv_str = (sv_size_mb >= 1) and string.format("%.2f MB", sv_size_mb) or string.format("%.2f KB", sv_size_kb)
+        local sv_health = _G["AutoLuaCleaner"] and "|c00FF00Healthy|r" or "|cFF0000Corrupted|r"
+        local sv_warn = (sv_size_kb > 5000) and "|cFFA500(Large File)|r" or "|c00FF00(Safe)|r"
+        pc_data_str = string.format("Data Footprint: %s (Estimated)\nSavedVariable Disk Size: %s (%s) %s\n", mem_str, sv_str, sv_health, sv_warn)
+    end
+
     local prof_txt = ""
     local p_data = ALC.settings.saved_profiler_data
     if p_data and p_data[1] and p_data[1].peak and p_data[1].peak > 0 then
@@ -429,15 +573,19 @@ function ALC.get_stats_text()
             p_data[1].name
         )
     end
+    
+    local num_errors = ALC.settings.error_logs and #ALC.settings.error_logs or 0
+    local err_str = num_errors > 0 and string.format("|cFF0000%d (Check Logs)|r", num_errors) or "|c00FF000 (Healthy)|r"
 
     return string.format(
         "Installed Since: %s\nVersion History: %s\nActive Library: %s\n" ..
-        "Max Lua Memory: %s\nCurrent Global Memory: %s %s\n\n" ..
+        "Max Lua Memory: %s\nCurrent Global Memory: %s %s\n%s" ..
+        "Active Errors: %s\n\n" ..
         "|c00FF00[Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %s\n\n" ..
         "|cFFA500[Previous Session Statistics]|r\nCleanups Triggered: %d\nMemory Freed: %s\n\n" ..
         "|c00FFFF[Lifetime Statistics]|r\nTotal Cleanups: %d\nTotal Memory Freed: %s%s", 
         install_date, v_history, lib_text, lua_limit_txt, ALC.format_memory(current_mb), 
-        mem_warning, ALC.session_cleanups, ALC.format_memory(ALC.session_mb_freed), 
+        mem_warning, pc_data_str, err_str, ALC.session_cleanups, ALC.format_memory(ALC.session_mb_freed), 
         ALC.settings.prev_session_cleanups or 0, 
         ALC.format_memory(ALC.settings.prev_session_mb_freed or 0),
         ALC.settings.total_cleanups or 0, 
@@ -449,14 +597,11 @@ end
 function ALC.migrate_data()
     if ALC.settings then
         ALC.settings.pmOverridden = nil
-        if not ALC.settings.is_migrated_007 then
-            ALC.settings.show_ui = false
-            ALC.settings.track_stats = false
-            ALC.settings.is_log_enabled = false
-            ALC.settings.is_migrated_007 = true
+        if not ALC.settings.is_migrated_008 then
+            ALC.settings.is_migrated_008 = true
         end
-        if ALC.settings.threshold_console == 85 then
-            ALC.settings.threshold_console = 70
+        if ALC.settings.threshold_console == 85 or ALC.settings.threshold_console == 70 then
+            ALC.settings.threshold_console = 60
         end
     end
     if _G["AutoLuaCleaner"] then
@@ -683,40 +828,61 @@ function ALC.lock_ui(save)
     end
 end
 
-function ALC.run_manual_cleanup()
+function ALC.run_manual_cleanup(force_feedback)
     ALC.mem_state = 1
+    ALC.last_cleanup_time = GetGameTimeMilliseconds()
     zo_callLater(function()
-        local before = collectgarbage("count") / 1024
+        local before_lua = collectgarbage("count") / 1024
+        local before_pool = ALC.get_console_pool_mb()
         for i = 1, 2 do collectgarbage("collect") end
-        local after = collectgarbage("count") / 1024
-        local freed = before - after
-        ALC.mem_state = 0
         
-        if freed > 0.001 then
-            ALC.session_cleanups = ALC.session_cleanups + 1
-            ALC.session_mb_freed = ALC.session_mb_freed + freed
+        zo_callLater(function()
+            local after_lua = collectgarbage("count") / 1024
+            local after_pool = ALC.get_console_pool_mb()
+            local freed = before_lua - after_lua
+            local freed_pool = before_pool - after_pool
+            ALC.mem_state = 0
             
-            if ALC.settings and ALC.settings.track_stats then
-                ALC.settings.total_cleanups = (ALC.settings.total_cleanups or 0) + 1
-                ALC.settings.total_mb_freed = (ALC.settings.total_mb_freed or 0) + freed
-                ALC.settings.last_session_cleanups = ALC.session_cleanups
-                ALC.settings.last_session_mb_freed = ALC.session_mb_freed
+            if freed > 0.001 then
+                ALC.session_cleanups = ALC.session_cleanups + 1
+                ALC.session_mb_freed = ALC.session_mb_freed + freed
                 
-                local now = GetGameTimeMilliseconds()
-                if (now - ALC.last_priority_save_time) >= 900000 then
-                    GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
-                    ALC.last_priority_save_time = now
+                if ALC.settings and ALC.settings.track_stats then
+                    ALC.settings.total_cleanups = (ALC.settings.total_cleanups or 0) + 1
+                    ALC.settings.total_mb_freed = (ALC.settings.total_mb_freed or 0) + freed
+                    ALC.settings.last_session_cleanups = ALC.session_cleanups
+                    ALC.settings.last_session_mb_freed = ALC.session_mb_freed
+                    
+                    local now = GetGameTimeMilliseconds()
+                    if (now - ALC.last_priority_save_time) >= 900000 then
+                        GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
+                        ALC.last_priority_save_time = now
+                    end
                 end
+                
+                local msg = ""
+                if IsConsoleUI() then
+                    msg = string.format("Mem Pool Freed: %s (LUA Mem: %s)", ALC.format_memory(math.max(freed_pool, 0)), ALC.format_memory(freed))
+                else
+                    msg = string.format("LUA Mem Freed: %s (Mem Pool: %s)", ALC.format_memory(freed), ALC.format_memory(math.max(freed_pool, 0)))
+                end
+                
+                if ALC.settings.is_log_enabled and CHAT_SYSTEM then 
+                    CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r " .. msg) 
+                end
+                ALC.safe_csa("|c00FFFF" .. msg .. "|r", 90)
+            elseif force_feedback then
+                local msg = IsConsoleUI() 
+                    and "Mem Pool Freed: 0 MB (Console Pool Locked)" 
+                    or "LUA Mem Freed: 0 MB (Already Clean)"
+                if ALC.settings.is_log_enabled and CHAT_SYSTEM then 
+                    CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r " .. msg) 
+                end
+                ALC.safe_csa("|c00FFFF" .. msg .. "|r", 90)
             end
             
-            local msg = string.format("Memory Freed %s", ALC.format_memory(freed))
-            if ALC.settings.is_log_enabled and CHAT_SYSTEM then 
-                CHAT_SYSTEM:AddMessage("|c00FFFF[ALC]|r " .. msg) 
-            end
-            ALC.safe_csa("|c00FFFF" .. msg .. "|r", 90)
-        end
-        
-        if ALC.settings.show_ui then ALC.update_ui() end
+            if ALC.settings.show_ui then ALC.update_ui() end
+        end, 200)
     end, 500)
 end
 
@@ -724,12 +890,15 @@ function ALC.trigger_memory_check(check_type, delay)
     if not ALC.settings.is_enabled then return end
     if ALC.mem_state == 1 or ALC.is_mem_check_queued then return end
     
-    local current_mb = ALC.get_hybrid_memory_data()
-    local limit_threshold = IsConsoleUI() 
-        and ALC.settings.threshold_console 
-        or ALC.settings.threshold_pc
+    local now_ms = GetGameTimeMilliseconds()
+    local fallback_ms = ALC.settings.fallback_delay_sec * 1000
+    if (now_ms - (ALC.last_cleanup_time or 0)) < fallback_ms then return end
+    
+    local current_pool = ALC.get_hybrid_memory_data()
+    local current_lua = collectgarbage("count") / 1024
+    local limit_threshold = IsConsoleUI() and ALC.settings.threshold_console or ALC.settings.threshold_pc
 
-    if current_mb >= limit_threshold then
+    if current_pool >= limit_threshold or (IsConsoleUI() and current_lua >= limit_threshold) then
         local in_combat = IsUnitInCombat and IsUnitInCombat("player")
         if in_combat or IsUnitDead("player") then 
             if ALC.settings.show_ui then ALC.update_ui() end
@@ -754,8 +923,9 @@ function ALC.trigger_memory_check(check_type, delay)
                 if not in_menu then return end 
             end
             
-            local recheck_mb = ALC.get_hybrid_memory_data()
-            if recheck_mb >= limit_threshold then
+            local recheck_pool = ALC.get_hybrid_memory_data()
+            local recheck_lua = collectgarbage("count") / 1024
+            if recheck_pool >= limit_threshold or (IsConsoleUI() and recheck_lua >= limit_threshold) then
                 ALC.run_manual_cleanup()
                 EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
                 EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_Fallback", 
@@ -778,9 +948,9 @@ function ALC.update_graph_visuals()
     
     if alc.settings.lite_mode and not alc.settings.show_graph_diags then return end
     alc.graph_data = alc.graph_data or {} 
-    
+        
     local is_lite = alc.settings.lite_mode
-    local current_mb = alc.get_hybrid_memory_data()
+    local current_mb = IsConsoleUI() and alc.get_console_pool_mb() or alc.get_hybrid_memory_data()
     local current_lat = alc.settings.track_ping and GetLatency() or 0
     local fps = (alc.settings.track_fps or alc.settings.track_frametime) and GetFramerate() or 0
     local current_ft = fps > 0 and math.floor(1000 / fps) or 0
@@ -1315,7 +1485,8 @@ function ALC.update_history_text()
     if session_window then
         local text_w = history_label:GetTextWidth()
         local text_h = history_label:GetTextHeight()
-        session_window:SetDimensions(text_w + 20, text_h + 15)
+        local min_width = IsConsoleUI() and 380 or 280
+        session_window:SetDimensions(math.max(text_w + 20, min_width), math.max(text_h + 15, 60))
     end
 end
 
@@ -1453,17 +1624,26 @@ end
 function ALC.update_ui()
     if not ALC.settings.show_ui then return end
     
-    local current_mb = ALC.get_hybrid_memory_data()
+    local current_lua = ALC.get_hybrid_memory_data()
+    local pool_mb = ALC.get_console_pool_mb()
+    local current_main = IsConsoleUI() and pool_mb or current_lua
     
     local user_limit = IsConsoleUI() and ALC.settings.threshold_console or ALC.settings.threshold_pc
-    local _, fill_r, fill_g, fill_b = ALC.get_main_label_color(current_mb, user_limit)
-    local fill_pct = math.min((current_mb / user_limit) * 100, 100)
+    local _, fill_r, fill_g, fill_b = ALC.get_main_label_color(current_main, user_limit)
+    local fill_pct = math.min((current_main / user_limit) * 100, 100)
     
-    local status_color = ALC.get_fixed_hard_cap_color(current_mb)
+    local status_color = ALC.get_fixed_hard_cap_color(current_main)
     
     local t_str = IsUnitInCombat("player") and "|cFF0000[ALC] (Combat)|r" or "|c00FFFF[ALC]|r"
-    local m_str = ALC.format_memory(current_mb)
-    ALC.ui_label:SetText(string.format("%s Memory: %s%s|r", t_str, status_color, m_str))
+    local m_str = ALC.format_memory(current_main)
+    
+    if IsConsoleUI() then
+        local lua_str = string.format(" |c888888(LUA Mem: %.2f MB)|r", current_lua)
+        ALC.ui_label:SetText(string.format("%s Mem Pool: %s%s%s", t_str, status_color, m_str, lua_str))
+    else
+        local pool_str = string.format(" |c888888(Mem Pool: %d MB)|r", math.floor(pool_mb))
+        ALC.ui_label:SetText(string.format("%s LUA Mem: %s%s%s", t_str, status_color, m_str, pool_str))
+    end
     
     if ALC.percent_bar then
         ALC.percent_bar:SetDimensions(130 * (fill_pct / 100), 8)
@@ -1750,64 +1930,121 @@ function ALC.build_graph_ui()
 end
 
 function ALC.show_missing_library_warning()
+    local lam_ver, lam_en, lca_ver, lca_en = ALC.get_settings_library()
+    local lam_req, lca_req = REQUIRED_LAM_VERSION, REQUIRED_LCA_VERSION
+    
+    local lam_state = (lam_ver == 0) and "Missing" or (not lam_en and "Not Enabled" or (lam_ver < lam_req and "Outdated" or "OK"))
+    local lca_state = (lca_ver == 0) and "Missing" or (not lca_en and "Not Enabled" or (lca_ver < lca_req and "Outdated" or "OK"))
+    
+    if lam_state == "OK" and lca_state == "OK" then return end
+    
     local alerts = {}
-    local lam_ver, lca_ver = ALC.get_settings_library()
-    lam_ver = lam_ver or 0
-    lca_ver = lca_ver or 0
+    if lam_state == "Missing" then table.insert(alerts, "|c00FFFFLibAddonMenu-2.0|r (Missing)")
+    elseif lam_state == "Not Enabled" then table.insert(alerts, string.format("|c00FFFFLibAddonMenu-2.0|r (Disabled) [%sv%d|r]", lam_ver >= lam_req and "|c00FF00" or "|cFF0000", lam_ver))
+    elseif lam_state == "Outdated" then table.insert(alerts, string.format("|c00FFFFLibAddonMenu-2.0|r (Outdated) [|cFF0000v%d|r]", lam_ver)) end
+
+    if lca_state == "Missing" then table.insert(alerts, "|c00FFFFLibCombatAlerts|r (Missing)")
+    elseif lca_state == "Not Enabled" then table.insert(alerts, string.format("|c00FFFFLibCombatAlerts|r (Disabled) [%sv%d|r]", lca_ver >= lca_req and "|c00FF00" or "|cFF0000", lca_ver))
+    elseif lca_state == "Outdated" then table.insert(alerts, string.format("|c00FFFFLibCombatAlerts|r (Outdated) [|cFF0000v%d|r]", lca_ver)) end
     
-    if lam_ver == 0 then table.insert(alerts, "|c00FFFFLibAddonMenu-2.0|r (Missing)")
-    elseif lam_ver < REQUIRED_LAM_VERSION then table.insert(alerts, "|c00FFFFLibAddonMenu-2.0|r (Outdated)") end
+    if not ALC.settings.has_shown_lib_warning_008 then
+        local dialog_id = "ALC_MISSING_LIBRARY_WARN"
+        local popup_title = "|cFF0000ALC - Optional Dependency Alert|r"
+        local popup_body = "For full functionality, please update or install and enable:\n\n" .. table.concat(alerts, "\n")
+                           
+        local function on_ack()
+            ALC.settings.has_shown_lib_warning_008 = true
+            local tick_ms = GetGameTimeMilliseconds()
+            if (tick_ms - ALC.last_priority_save_time) >= 900000 then
+                GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
+                ALC.last_priority_save_time = tick_ms
+            end
+        end
+
+        if not ESO_Dialogs[dialog_id] then
+            ESO_Dialogs[dialog_id] = {
+                canQueue = true, 
+                gamepadInfo = { dialogType = GAMEPAD_DIALOGS.BASIC }, 
+                title = { text = popup_title }, 
+                mainText = { text = popup_body },
+                buttons = { { text = "Acknowledge / Close", keybind = "DIALOG_PRIMARY", callback = on_ack } }
+            }
+        end
+
+        zo_callLater(function()
+            if IsInGamepadPreferredMode() then ZO_Dialogs_ShowGamepadDialog(dialog_id) 
+            else ZO_Dialogs_ShowDialog(dialog_id) end
+        end, 2000)
+    end
+
+    local csa_msg = ""
+    if lam_state == lca_state and lam_state ~= "OK" then
+        csa_msg = string.format("%s Optional Libraries!", lam_state)
+    elseif lam_state ~= "OK" and lca_state == "OK" then
+        if lam_state == "Outdated" then csa_msg = string.format("Optional Dependency Enabled LibAddonMenu-2.0 Incorrect Version \"v%d\"", lam_ver)
+        else csa_msg = string.format("%s Optional Library LibAddonMenu-2.0!", lam_state) end
+    elseif lca_state ~= "OK" and lam_state == "OK" then
+        if lca_state == "Outdated" then csa_msg = string.format("Optional Dependency Enabled LibCombatAlerts Incorrect Version \"v%d\"", lca_ver)
+        else csa_msg = string.format("%s Optional Library LibCombatAlerts!", lca_state) end
+    else
+        csa_msg = "Missing/Outdated Optional Libraries!"
+    end
     
-    if not LibCombatAlerts then table.insert(alerts, "|c00FFFFLibCombatAlerts|r (Missing)")
-    elseif lca_ver < REQUIRED_LCA_VERSION then table.insert(alerts, "|c00FFFFLibCombatAlerts|r (Outdated)") end
+    local show_csa = true
+    local show_chat = true
     
-    if #alerts == 0 then return end
+    local bad_lam = (lam_state ~= "OK")
+    local bad_lca = (lca_state ~= "OK")
+    local correct_lam = (lam_state == "Not Enabled" and lam_ver >= lam_req)
+    local correct_lca = (lca_state == "Not Enabled" and lca_ver >= lca_req)
     
-    local dialog_id = "ALC_MISSING_LIBRARY_WARN"
-    local popup_title = "|cFF0000ALC - Dependency Alert|r"
-    local popup_body = "For full functionality, please update or install:\n\n" .. table.concat(alerts, "\n")
-                       
-    local function on_ack()
-        ALC.settings.has_shown_lib_warning_008 = true
-        local tick_ms = GetGameTimeMilliseconds()
-        if (tick_ms - ALC.last_priority_save_time) >= 900000 then
-            GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
-            ALC.last_priority_save_time = tick_ms
+    local only_disabled_correct = false
+    if bad_lam and bad_lca then only_disabled_correct = (correct_lam and correct_lca)
+    elseif bad_lam then only_disabled_correct = correct_lam
+    elseif bad_lca then only_disabled_correct = correct_lca end
+
+    if only_disabled_correct then
+        if IsConsoleUI() then
+            show_chat = false
+            show_csa = true
+        else
+            show_csa = false
+            show_chat = true
         end
     end
 
-    if not ESO_Dialogs[dialog_id] then
-        ESO_Dialogs[dialog_id] = {
-            canQueue = true, 
-            gamepadInfo = { dialogType = GAMEPAD_DIALOGS.BASIC }, 
-            title = { text = popup_title }, 
-            mainText = { text = popup_body },
-            buttons = { { text = "Acknowledge / Close", keybind = "DIALOG_PRIMARY", callback = on_ack } }
-        }
-    end
-
+    local chat_msg = "|cFF0000[ALC Error]|r " .. csa_msg
+    
     zo_callLater(function()
-        if IsInGamepadPreferredMode() then 
-            ZO_Dialogs_ShowGamepadDialog(dialog_id) 
-        else 
-            ZO_Dialogs_ShowDialog(dialog_id) 
+        if show_chat and CHAT_SYSTEM then CHAT_SYSTEM:AddMessage(chat_msg) end
+        
+        if show_csa and CENTER_SCREEN_ANNOUNCE then
+            local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
+            params:SetText("|cFF0000[ALC Error]|r " .. csa_msg)
+            params:SetLifespanMS(10000)
+            CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
         end
-    end, 2000)
-
-    if CHAT_SYSTEM then 
-        CHAT_SYSTEM:AddMessage("|cFF0000[ALC Setup Warning]|r Please update your libraries.") 
-    end
+    end, 4000)
 end
 
 function ALC.parse_profiler_data()
     local addon_times = {}
+    local path_cache = {}
+    local valid_cache = {}
     
     if not GetScriptProfilerNumFrames then
         return {{ name = "API Error", peak = 0 }}
     end
     
     local num_frames = GetScriptProfilerNumFrames()
+    local parse_start_time = GetGameTimeMilliseconds()
+    
     for f = 1, num_frames do
+        if IsConsoleUI() and (GetGameTimeMilliseconds() - parse_start_time) > 750 then
+            if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|cFF0000[ALC]|r Console CPU Limit Reached: Partial Scan Results Generated.") end
+            break
+        end
+        
         local num_rec = GetScriptProfilerFrameNumRecords(f)
         for r = 1, num_rec do
             local rec_idx, start_ns, end_ns, _, rec_type = GetScriptProfilerRecordInfo(f, r)
@@ -1815,33 +2052,35 @@ function ALC.parse_profiler_data()
             if rec_type == SCRIPT_PROFILER_RECORD_DATA_TYPE_CLOSURE then
                 local _, f_path, _ = GetScriptProfilerClosureInfo(rec_idx)
                 if f_path then
-                    local mod_name = string.match(f_path, "user:/AddOns/([^/]+)/")
-                    if not mod_name and string.find(f_path, "EsoUI") then 
-                        mod_name = "esoui" 
+                    local mod_name = path_cache[f_path]
+                    if mod_name == nil then
+                        mod_name = string.match(f_path, "user:/AddOns/([^/]+)/")
+                        if not mod_name and string.find(f_path, "EsoUI") then mod_name = "esoui" end
+                        path_cache[f_path] = mod_name or false
                     end
                     
                     if mod_name and mod_name ~= "esoui" then
-                        local is_valid = true
-                        
-                        if not ALC.settings.can_profile_self and mod_name == ALC.name then
-                            is_valid = false
-                        end
-                        
-                        if not ALC.settings.include_esoprofiler and mod_name:lower() == "esoprofiler" then
-                            is_valid = false
-                        end
-                        
-                        local m_name_lower = mod_name:lower()
-                        local is_lib = string.find(m_name_lower, "lib")
-                        
-                        if ALC.settings.exclude_libs and is_lib then
-                            is_valid = false
-                        end
-                        if is_lib and ALC.settings.specific_lib_excludes[mod_name] then
-                            is_valid = false
-                        end
-                        if not is_lib and ALC.settings.specific_addon_excludes[mod_name] then
-                            is_valid = false
+                        local is_valid = valid_cache[mod_name]
+                        if is_valid == nil then
+                            is_valid = true
+                            if not ALC.settings.can_profile_self and mod_name == ALC.name then 
+                                is_valid = false 
+                            end
+                            if not ALC.settings.include_esoprofiler and mod_name:lower() == "esoprofiler" then 
+                                is_valid = false 
+                            end
+                            local m_name_lower = mod_name:lower()
+                            local is_lib = string.find(m_name_lower, "lib")
+                            if ALC.settings.exclude_libs and is_lib then 
+                                is_valid = false 
+                            end
+                            if is_lib and ALC.settings.specific_lib_excludes[mod_name] then 
+                                is_valid = false 
+                            end
+                            if not is_lib and ALC.settings.specific_addon_excludes[mod_name] then 
+                                is_valid = false 
+                            end
+                            valid_cache[mod_name] = is_valid
                         end
                         
                         local duration_ms = (end_ns - start_ns) / 1000000
@@ -1908,6 +2147,11 @@ function ALC.stop_profiler()
         
         if ALC.settings.show_session_ui then ALC.update_history_text() end
         if ALC.profiler_timer_lbl then ALC.profiler_timer_lbl:SetText("") end
+        
+        if IsConsoleUI() then
+            d("|cFF0000[ALC]|r Console UI will reload in 5 seconds to flush memory...")
+            zo_callLater(function() ReloadUI("ingame") end, 5000)
+        end
     end
 
     if IsUnitInCombat and IsUnitInCombat("player") then
@@ -1991,24 +2235,36 @@ function ALC.init(event_code, addon_name)
     EVENT_MANAGER:UnregisterForEvent(ALC.name, EVENT_ADD_ON_LOADED)
     
     local active_world = GetWorldName() or "Default"
+    local sv_name = "AutoLuaCleaner"
+    local account = GetDisplayName()
+
+    if _G[sv_name] and _G[sv_name][active_world] and _G[sv_name][active_world][account] then
+        local old_data = _G[sv_name][active_world][account]["AccountWide"]
+        if old_data then
+            _G[sv_name]["Default"] = _G[sv_name]["Default"] or {}
+            _G[sv_name]["Default"][account] = _G[sv_name]["Default"][account] or {}
+            _G[sv_name]["Default"][account]["$AccountWide"] = _G[sv_name]["Default"][account]["$AccountWide"] or {}
+            _G[sv_name]["Default"][account]["$AccountWide"][active_world] = _G[sv_name]["Default"][account]["$AccountWide"][active_world] or {}
+            
+            for k, v in pairs(old_data) do
+                _G[sv_name]["Default"][account]["$AccountWide"][active_world][k] = v
+            end
+            _G[sv_name][active_world] = nil
+        end
+    end
+
     ALC.settings = ZO_SavedVars:NewAccountWide(
-        "AutoLuaCleaner", 1, "AccountWide", ALC.defaults, active_world
+        sv_name, 1, active_world, ALC.defaults
     )
     ALC.migrate_data()
 
-    local lam_ver, lca_ver = ALC.get_settings_library()
-    lam_ver = lam_ver or 0
-    lca_ver = lca_ver or 0
+    local lam_ver, lam_en, lca_ver, lca_en = ALC.get_settings_library()
 
-    local is_lam_ok = (lam_ver >= REQUIRED_LAM_VERSION)
-    ALC.is_lca_valid = (LibCombatAlerts ~= nil and lca_ver >= REQUIRED_LCA_VERSION)
+    local is_lam_ok = (lam_en and lam_ver >= 30)
+    ALC.is_lca_valid = (LibCombatAlerts ~= nil and lca_en and lca_ver >= 7010)
 
-    if (not is_lam_ok or not ALC.is_lca_valid) and not ALC.settings.has_shown_lib_warning_008 then 
+    if not is_lam_ok or not ALC.is_lca_valid then 
         ALC.show_missing_library_warning() 
-    end
-
-    if not is_lam_ok then 
-        ALC.settings.track_stats = false 
     end
     
     if not ALC.settings.install_date then
@@ -2182,10 +2438,10 @@ function ALC.init(event_code, addon_name)
         SLASH_COMMANDS["/alcchatlogs"] = SLASH_COMMANDS["/alclogs"] 
     end
 
-    SLASH_COMMANDS["/alcclean"] = function() ALC.run_manual_cleanup() end
+    SLASH_COMMANDS["/alcclean"] = function() ALC.run_manual_cleanup(true) end
     SLASH_COMMANDS["/alccleanup"] = SLASH_COMMANDS["/alcclean"]
 
-    if ALC.settings.is_stats_log_enabled then 
+    if ALC.settings.is_stats_log_enabled then
         EVENT_MANAGER:RegisterForUpdate("ALC_StatsTick", 60000, function() 
             ALC.check_session_peak() 
         end) 
@@ -2346,19 +2602,24 @@ function ALC.init(event_code, addon_name)
 end
 
 function ALC.build_lam2_menu()
-    local lam_ver, lca_ver = ALC.get_settings_library()
-    if lam_ver == 0 then return end
+    local lam_ver, lam_en, lca_ver, lca_en = ALC.get_settings_library()
+    if not lam_en or lam_ver < 30 then return end
 
-    if lam_ver > 0 and lam_ver < REQUIRED_LAM_VERSION then
+    if lam_ver >= 30 and lam_ver < REQUIRED_LAM_VERSION then
         zo_callLater(function()
             local warn_msg = string.format(
                 "|cFFFF00Warning: LibAddonMenu is outdated (v%d). Update to v%d+ for ALC.|r", 
                 lam_ver, REQUIRED_LAM_VERSION
             )
             if CHAT_SYSTEM then CHAT_SYSTEM:AddMessage("|cFF0000[ALC]|r " .. warn_msg) end
-            ALC.safe_csa(warn_msg)
+            if CENTER_SCREEN_ANNOUNCE then
+                local p = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(
+                    CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE
+                )
+                p:SetText(warn_msg); p:SetLifespanMS(4000)
+                CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(p)
+            end
         end, 4000)
-        return
     end
 
     local c_cmds = {
@@ -2383,6 +2644,7 @@ function ALC.build_lam2_menu()
         "|c00FFFF/alcstart|r |cFFD700- Start " .. (is_pad and "30s" or "60s") .. " Profiler Data Gather|r\n\n", 
         "|c00FFFF/alcprostop|r |cFFD700- Stop Profiler Scan|r\n\n",
         "|c00FFFF/alcprolist|r |cFFD700- List Profiler Results to Chat|r\n\n",
+        "|c00FFFF/alcwipedata|r |cFFD700- Soft-delete a specific SavedVariables table|r\n\n",
         "|c00FFFF/alcdelvars|r |cFFD700- Reset ALL settings to defaults|r\n\n",
         "|c00FFFF/alcclean|r |cFFD700- Force manual Lua cleanup|r"
     }
@@ -2417,6 +2679,7 @@ function ALC.build_lam2_menu()
         "|c00FFFF/alcstart|r |cFFD700- Start " .. (is_pad and "30s" or "60s") .. " Profiler Data Gather|r\n", 
         "|c00FFFF/alcprostop|r |cFFD700- Stop Profiler Scan|r\n",
         "|c00FFFF/alcprolist|r |cFFD700- List Profiler Results to Chat|r\n",
+        "|c00FFFF/alcwipedata|r |cFFD700- Soft-delete a specific SavedVariables table|r\n",
         "|c00FFFF/alcdelvars|r |cFFD700- Reset ALL settings to defaults|r\n",
         "|c00FFFF/alcclean|r |cFFD700- Force manual Lua cleanup|r"
     }
@@ -2459,7 +2722,7 @@ function ALC.build_lam2_menu()
         table.insert(build_data, { 
             type = "button", 
             name = "|c00FFFFMANUAL CLEANUP|r", 
-            func = function() ALC.run_manual_cleanup() end, 
+            func = function() ALC.run_manual_cleanup(true) end, 
             width = "half" 
         })
         table.insert(build_data, { 
@@ -2480,7 +2743,7 @@ function ALC.build_lam2_menu()
         table.insert(build_data, { 
             type = "button", 
             name = "|c00FFFFMANUAL CLEANUP|r", 
-            func = function() ALC.run_manual_cleanup() end, 
+                unc = function() ALC.run_manual_cleanup(true) end, 
             width = "full" 
         })
     end
@@ -2997,7 +3260,7 @@ function ALC.build_lam2_menu()
     end
     
     table.insert(build_data, { type = "divider" })
-    
+
     local function ResetToDefaults()
         local exclude = {
             total_cleanups = true, total_mb_freed = true, last_session_cleanups = true,
@@ -3063,7 +3326,7 @@ function ALC.build_lam2_menu()
         })
     end
 
-    lib_lam:RegisterAddonPanel("AutoLuaCleanerOptions", menu_header)
+    ALC.lam_panel = lib_lam:RegisterAddonPanel("AutoLuaCleanerOptions", menu_header)
     lib_lam:RegisterOptionControls("AutoLuaCleanerOptions", build_data)
 end
 
