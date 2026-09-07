@@ -10,20 +10,7 @@
 
 Core/ALC_Core.lua
 lang/en.lua
-lang/fr.lua
 lang/de.lua
-lang/es.lua
-lang/it.lua
-lang/ptbr.lua
-lang/ru.lua
-lang/jp.lua
-lang/zh.lua
-lang/pl.lua
-lang/tr.lua
-lang/nl.lua
-lang/uk.lua
-lang/ms.lua
-lang/tl.lua
 Data/ALC_Data.lua
 Core/ALC_Commands.lua
 MODULE/ALC_Migration.lua

@@ -32,17 +32,4 @@ ALC.COMMAND_CATEGORIES = {
 ALC.LANGUAGE_NAMES = {
     en = "English",
     de = "Deutsch",
-    es = "Español",
-    fr = "Français",
-    it = "Italiano",
-    jp = "日本語",
-    ms = "Bahasa Melayu",
-    nl = "Nederlands",
-    pl = "Polski",
-    ptbr = "Português (Brasil)",
-    ru = "Русский",
-    tl = "Tagalog",
-    tr = "Türkçe",
-    uk = "Українська",
-    zh = "中文",
 }
