@@ -35,7 +35,7 @@ Technical Style & Logic
   - Improved Memory Tracking Accuracy by separating logical Lua memory from the physical Console Memory Pool across the UI and graph.
 
 UI & Scene Manager
-  - Added Gamepad UI Movement via LibCombatAlerts to allow PS5/Xbox users to move all ALC windows with D-Pad.
+  - Added Gamepad UI Movement via LibCombatAlerts to allow PS5/Xbox users to move all ALC windows with the Right Stick.
   - Fixed the Scene Manager Override Bug that forcefully unhid the ALC UI by implementing strict fragment queries.
 
 Profiler & Diagnostics
