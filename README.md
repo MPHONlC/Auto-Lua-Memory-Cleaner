@@ -1,203 +1,92 @@
 <div align="center">
 
-# [**Auto Lua Memory Cleaner**](https://www.esoui.com/downloads/info4388-AutoLuaMemoryCleaner.html)
-[![ESOUI](https://img.shields.io/badge/PC-ESOUI-orange.svg?style=for-the-badge)](https://www.esoui.com/downloads/fileinfo.php?id=4388) [![Bethesda Mods](https://img.shields.io/badge/Console-Bethesda.net-black.svg?style=for-the-badge&logo=bethesda&logoColor=white)](https://mods.bethesda.net/en/elderscrollsonline/details/9926b8d4-d4ca-4215-8790-013c0b1630c0/AUTO_LUA_MEMORY_CLEANER)
+# Auto Lua Memory Cleaner
 
-A lightweight, event-driven background memory cleaner designed to help clear out background memory 
-junk during natural breaks.
+*A lightweight, event-driven background memory cleaner for The Elder Scrolls Online.*
 
-</div>
-
-**Optional Dependencies:**
-This addon requires the following optional libraries:
-* [LibAddonMenu-2.0](https://www.esoui.com/downloads/info7-LibAddonMenu-2.0.html) <sub>*(Required for Settings Menu)*</sub>
-* [LibCombatAlerts](https://www.esoui.com/downloads/info2824-LibCombatAlerts.html) <sub>*(Required for Gamepad UI Movement)*</sub>
-
-**Without the Dependencies:** You can still run the addon entirely independent, and control its
-settings via built-in slash commands as a standalone utility.
-
----
-
-<a id="why-use-this"></a>
-<div align="center">
-
-[![WHY USE THIS OVER OTHER MEMORY CLEANERS?](https://img.shields.io/badge/WHY%20USE%20THIS%20OVER%20OTHER%20MEMORY%20CLEANERS%3F-D4A017?style=for-the-badge)](#why-use-this)
+![Version](https://img.shields.io/badge/version-0.0.9-9CD04C?style=flat-square)
+![ESO API](https://img.shields.io/badge/ESO%20API-101050%20%7C%20101051-00FFFF?style=flat-square)
+![License](https://img.shields.io/badge/license-GPLv3-fa9c1b?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-PC%20%7C%20Xbox%20%7C%20PlayStation-FF69B4?style=flat-square)
 
 </div>
 
-Other memory cleaners use constant "OnUpdate" timers that ping the game every few seconds to check 
-your memory. The timer loops endlessly from the moment you log in. They do often pause the cleanup, 
-but the polling loop keeps firing in the background even during fights. They also often calculate 
-memory strings even when the UI is hidden or closed, are built before console APIs existed, and 
-only track "collectgarbage" <sub>*(ignoring console UI limits)*</sub>, all of which unnecessarily 
-wastes CPU cycles. 
+Most memory cleaners run a fixed-interval `OnUpdate` timer that pings your memory every few seconds, looping endlessly from the moment you log in. Some of them do skip the check while you're in combat, but not all of them do - and some still print a memory info line on that same timer regardless of combat state or whether you're even looking at the UI. Most are also built before console APIs existed, and only track `collectgarbage` (ignoring console UI limits).
 
-Auto Lua Memory Cleaner uses a dormant, event-driven trigger. It stays completely asleep 
-<sub>*(using 0% CPU)*</sub> and only wakes up to check your memory during natural breaks while 
-playing, such as right after you exit combat or while inside a menu.
+Auto Lua Memory Cleaner is event-driven first: real triggers (exiting combat, entering a menu, a low-memory warning) do almost all the work. There's still a lightweight ~5-second fallback poll running in the background (one cheap number comparison, not a full scan or UI rebuild) to catch you standing around doing nothing else, but that's a fraction of the constant polling most other memory cleaners run outright.
 
-<p align="center">
-  <img src="https://cdn-eso.mmoui.com/preview/pvw15216.png" alt="Auto Lua Memory Cleaner UI 1" />
-  <br>
-  <img src="https://cdn-eso.mmoui.com/preview/pvw15318.png" alt="Auto Lua Memory Cleaner UI 2" />
-</p>
 
-<a id="features"></a>
-<div align="center">
+## Why use this over other memory cleaners?
 
-[![FEATURES](https://img.shields.io/badge/FEATURES-D4A017?style=for-the-badge)](#features)
+- **Near-Zero Idle Footprint.** Most checks run only on real triggers - loading screens, exiting combat state, entering a menu - backed by a lightweight ~5-second fallback poll (one cheap number check, not a full scan) so idle time standing around is still covered without a heavy constant loop.
+- **Smart combat lockout.** Blocks the automatic threshold-based cleanup from running while you're in combat or dead, so there's no mid-fight frame drops - the only exception is a genuine low-memory emergency, where the bigger risk is an outright crash.
+- **PC & Console aware.** PC watches the Lua heap against a ~512 MB soft limit; Console watches the strict 100 MB hardware addon-memory pool and can auto-reload after travel to actually clear it (a plain GC pass never touches that figure, only a reload does).
+- **Double-pass sweep.** Runs two back-to-back `collectgarbage("collect")` passes so pending `__gc` hooks and orphaned weak tables actually get cleared, not just queued.
 
-</div>
+## Install
 
-* <a id="feat-zero"></a>[![Zero Idle Footprint](https://img.shields.io/badge/Zero%20Idle%20Footprint-forestgreen?style=flat-square)](#feat-zero) : Event trigger ensures the addon only runs checks during loading screens, exiting combat state, or while inside a menu. All graph modules, diagnostics, and trackers are strictly dormant and default to **OFF**.
-* <a id="feat-combat"></a>[![Smart Combat Lockout](https://img.shields.io/badge/Smart%20Combat%20Lockout-forestgreen?style=flat-square)](#feat-combat) : Will never force a garbage collection cycle while you are in combat or dead, preventing dangerous mid-fight frame drops <sub>*(Imagine crashing in the middle of your Trifecta, or God Slayer run!)*</sub>.
-* <a id="feat-support"></a>[![PC & Console Support](https://img.shields.io/badge/PC%20%26%20Console%20Support-forestgreen?style=flat-square)](#feat-support) : Automatically adapts to your hardware specific memory rules. On PC, it helps you stay safely below the 512MB performance "soft limit" to prevent UI lag and stuttering. On Console, it safely monitors the strict 100MB hardware memory pool.
-* <a id="feat-sweep"></a>[![Double-Pass Engine Sweep](https://img.shields.io/badge/Double--Pass%20Engine%20Sweep-forestgreen?style=flat-square)](#feat-sweep) : A dual-pass garbage collection cycle to safely force execution of all pending __gc hooks and ensure orphaned weak tables are properly eradicated from the shared memory pool.
-* <a id="feat-memento"></a>[![PermMemento Integration](https://img.shields.io/badge/PermMemento%20Integration-forestgreen?style=flat-square)](#feat-memento) : Automatically detects [Permanent Memento](https://www.esoui.com/downloads/info4116-PermanentMemento.html) and disables its internal ALC cleaner.
-* <a id="feat-profiler"></a>[![Script Profiler Module](https://img.shields.io/badge/Script%20Profiler%20Module-forestgreen?style=flat-square)](#feat-profiler) : Built-in performance scanner that profiles all active addons over a 60-second <sub>*(PC)*</sub> or 30-second <sub>*(Console)*</sub> window to identify which ones are causing the highest performance spikes.
+Drop the `AutoLuaMemoryCleaner` folder into your `AddOns` directory. `LibAPH` is a hard dependency: install it too (drop its own folder into `AddOns`) or ALC won't load.
 
-<a id="advanced-profiler"></a>
-<div align="center">
+Optional: `LibAddonMenu-2.0` (PC settings menu) or `LibHarvensAddonSettings` (Console/Gamepad settings menu). Without either, ALC still runs standalone via slash commands.
 
-[![ADVANCED PROFILER & TRACKING](https://img.shields.io/badge/ADVANCED%20PROFILER%20%26%20TRACKING-D4A017?style=for-the-badge)](#advanced-profiler)
+## Features
 
-</div>
+- **Near-Zero Idle Footprint:** most checks run only on real triggers - loading screens, exiting combat state, entering a menu - backed by a lightweight ~5-second fallback poll so idle time standing around is still covered without a heavy constant loop.
+- **Smart Combat Lockout:** blocks the automatic threshold-based cleanup from running while you're in combat, preventing mid-fight frame drops *(imagine crashing in the middle of your Trifecta, or God Slayer run!)* - the only exception is a genuine low-memory emergency, where the bigger risk is an outright crash.
+- **(PC & Console) Support:** automatically adapts to your hardware specific memory rules. On PC, it helps you stay safely below the 512MB performance "soft limit" to prevent UI lag and stuttering. On Console, it safely monitors the strict 100MB hardware memory pool to prevent the game from forcefully reloading your UI.
+- **Double-Pass Engine Sweep:** a dual-pass garbage collection cycle to safely force execution of all pending `__gc` hooks and ensure orphaned weak tables are properly eradicated from the addon's Lua heap.
+- **Module Manager:** soft-disable optional feature files when not needed to save up on CPU usage - re-enable any of them anytime via slash command or the dedicated Module Manager settings.
+- **PermMemento Integration:** automatically detects [Permanent Memento](https://www.esoui.com/downloads/info4116) and disables its internal Memory cleaner.
 
-* <a id="feat-graph"></a>[![Dynamic Visual Graph](https://img.shields.io/badge/Dynamic%20Visual%20Graph-forestgreen?style=flat-square)](#feat-graph) : A detachable, btop inspired module provides a real-time, 15 second window into your system performance. Updating every 250ms, the glowing LED style line dynamically color shifts as you approach your memory threshold for intuitive, at-a-glance monitoring.
-* <a id="feat-lite"></a>[![Lite Mode](https://img.shields.io/badge/Lite%20Mode-forestgreen?style=flat-square)](#feat-lite) : This toggle hides the visual graph, leaving you with a clean, text only diagnostic overlay that provides all your vital data.
-* <a id="feat-baseline"></a>[![Stable Baseline Math](https://img.shields.io/badge/Stable%20Baseline%20Math-forestgreen?style=flat-square)](#feat-baseline) : Analyzes your connection and framerate over 60-second intervals to calculate "FPS Loss" and "Ping Spikes".
-* <a id="feat-session"></a>[![Previous Session Tracker](https://img.shields.io/badge/Previous%20Session%20Tracker-forestgreen?style=flat-square)](#feat-session) : A detachable UI that saves performance data every time you log out or reload your UI. Can track session <kbd>Peak</kbd> (Red), <kbd>Average</kbd> (Orange), <kbd>Final/Last-Seen Values</kbd> (White), and total <kbd>MemCleaned</kbd> per session (Cyan).
+## Usage & Core Settings
 
-**Legend <sub>*(Symbol Key)*</sub>:**
-**<** Less than <sub>*(under)*</sub> | **<=** Less than or equal to <sub>*(maximum)*</sub> | **>** Greater than <sub>*(over)*</sub> | **>=** Greater than or equal to <sub>*(at least)*</sub> | **+** And above <sub>*(e.g., 500+ means 500 or more)*</sub>
+- **Auto-cleanup:** runs silently based on your thresholds.
+- **Cleanup threshold:** separate sliders for PC (Lua heap MB) and Console (addon memory pool MB).
 
-* <a id="feat-diags"></a>[![Diagnostics Tracking](https://img.shields.io/badge/Diagnostics%20Tracking-forestgreen?style=flat-square)](#feat-diags) : Track real-time <kbd>Ping</kbd>, <kbd>FPS</kbd>, <kbd>Frametime</kbd> <sub>*(ms)*</sub>, and <kbd>KB/MB</kbd> memory creep. Text dynamically color-shifts by load:
-  * **FPS <sub>*(Current & Avg)*</sub>:** >=50 Green | 30-49 Orange | <30 Red
-  * **FPS Loss <sub>*(Spikes)*</sub>:** 0-5 Green | 6-15 Orange | 16+ Red
-  * **Latency <sub>*(ms)*</sub>:** 0-250 Yellow | 251-375 Deep Pink | 376+ Violet
-  * **Frametime:** <=20ms Dodger Blue | >20ms Cyan
-  * **Total Memory <sub>*(PC/Mac)*</sub>:** <320MB Green | 320-511MB Orange | 512MB+ Red
-  * **Total Memory <sub>*(Console)*</sub>:** <60MB Green | 60-99MB Orange | 100MB+ Red
-  * **Avg KB / MB Gains:** KB is static Magenta. MB matches your Total Memory color.
-* <a id="feat-profscale"></a>[![Profiler Scan Severity Scale](https://img.shields.io/badge/Profiler%20Scan%20Severity%20Scale-forestgreen?style=flat-square)](#feat-profscale) : Built-in script profiler dynamically colors scanned addons based on their actual millisecond execution time to help identify lag:
-  * **[Top] Severe Load <sub>*(500+ ms)*</sub>:** Red
-  * **[High] Noticeable Load <sub>*(100 ms to 499 ms)*</sub>:** Orange
-  * **[Moderate] Moderate Load <sub>*(20 ms to 99 ms)*</sub>:** Yellow
-  * **[Low] Normal Load <sub>*(5 ms to 19 ms)*</sub>:** Green
-  * **[Very Low] Fast Execution Load <sub>*(1 ms to 4 ms)*</sub>:** White
-  * **[Bottom] Negligible Load <sub>*(< 1 ms)*</sub>:** Gray
+## Slash commands
 
-<a id="usage"></a>
-<div align="center">
+| Command | Effect |
+|---|---|
+| <kbd>/alc</kbd> | List all commands in chat |
+| <kbd>/alcon</kbd> | Toggle Auto Lua Cleanup |
+| <kbd>/alcclean</kbd> | Force a manual Lua cleanup |
+| <kbd>/alcpoolreload</kbd> | Toggle Auto Pool Cleanup After Travel <sub>*(Console)*</sub> |
+| <kbd>/alcui</kbd> | Toggle the status UI |
+| <kbd>/alclock</kbd> | Lock/unlock the UI |
+| <kbd>/alcreset</kbd> | Reset UI position |
+| <kbd>/alccsa</kbd> | Toggle center-screen announcements |
+| <kbd>/alclogs</kbd> | Toggle chat logs |
+| <kbd>/alcwizard</kbd> | Re-run the Setup Wizard |
+| <kbd>/alcdelvars</kbd> | Reset all settings to defaults |
+| <kbd>/alcunloadwizard</kbd> | Toggle unload the Wizard module |
+| <kbd>/alcunloadmenu</kbd> | Toggle unload the Menu module |
+| <kbd>/alcunloadmigration</kbd> | Toggle unload the Migration module |
+| <kbd>/alcunloadui</kbd> | Toggle unload the UI module |
 
-[![USAGE & SETTINGS](https://img.shields.io/badge/USAGE%20%26%20SETTINGS-purple?style=for-the-badge)](#usage)
+## Do you actually need this?
 
-</div>
+> [!IMPORTANT]
+> If your total Lua memory usage consistently stays below 300 MB on PC (with an SSD), or below 70 MB on Console, the native ESO engine is usually efficient enough on its own. This addon is built for power users running dozens of heavy addons, Console players already pushing the 100 MB hardware cap, and anyone who wants manual control over when memory gets cleared.
 
-* <kbd>AUTO-CLEANUP</kbd> : Runs silently based on your thresholds.
-* <kbd>REPEAT DELAY</kbd> : Configure how long the addon waits to attempt again.
-* <kbd>TRACK STATISTICS</kbd> : Toggle to enable lifetime tracking <sub>*(Cleanups triggered, total MB freed)*</sub>.
-* <kbd>SCREEN ANNOUNCEMENTS</kbd> : Defaulted **ON** to show memory freed.
-* <kbd>FORCE MANUAL CLEANUP</kbd> : Instantly wipes unused Lua memory.
+> [!IMPORTANT]
+> This addon can't lower your memory usage if you're simply running too many heavy addons at once. It can only clear out background garbage faster and more predictably than the engine does on its own.
 
-<a id="commands"></a>
-<div align="center">
+## License
 
-[![SLASH COMMANDS](https://img.shields.io/badge/SLASH%20COMMANDS-orange?style=for-the-badge)](#commands)
-
-</div>
-
-* <kbd>/alc</kbd> : Displays commands in chat
-* <kbd>/alcon</kbd> : Toggle Auto Cleanup
-* <kbd>/alcui</kbd> : Toggle Memory UI visibility
-* <kbd>/alclock</kbd> : Lock/Unlock UI dragging
-* <kbd>/alcreset</kbd> : Reset UI position
-* <kbd>/alcbar</kbd> : Toggle Memory UI Bar
-* <kbd>/alcgraph</kbd> • <kbd>/alcgraphlock</kbd> • <kbd>/alcgraphreset</kbd> : Graph controls
-* <kbd>/alclite</kbd> • <kbd>/alcdiags</kbd> : Diagnostics toggles
-* <kbd>/alcfps</kbd> • <kbd>/alcping</kbd> • <kbd>/alcframetime</kbd> • <kbd>/alcgains</kbd> : Performance tracking
-* <kbd>/alcsession</kbd> • <kbd>/alcsessionlock</kbd> • <kbd>/alcsessionreset</kbd> : Session UI
-* <kbd>/alcstatpeak</kbd> • <kbd>/alcstatavg</kbd> • <kbd>/alcstatfinal</kbd> • <kbd>/alcstatclean</kbd> : Log toggles
-* <kbd>/alccsa</kbd> : Toggle Announcements
-* <kbd>/alclogs</kbd> <sub>*(PC Only)*</sub> : Toggle Chat Logs
-* <kbd>/alcstats</kbd> : Toggle Saving Statistics
-* <kbd>/alcprofile</kbd> • <kbd>/alcself</kbd> • <kbd>/alclibs</kbd> : Profiler toggles & filters
-* <kbd>/alcstart</kbd> • <kbd>/alcprostop</kbd> • <kbd>/alcprolist</kbd> : Profiler scan controls <sub>*(60s PC / 30s Console)*</sub>
-* <kbd>/alcdelvars</kbd> : Reset ALL settings to defaults
-* <kbd>/alcclean</kbd> : Force manual Lua memory cleanup
-
----
-
-<a id="troubleshooting"></a>
-<div align="center">
-
-[![TROUBLESHOOTING & SYSTEM LIMITS](https://img.shields.io/badge/TROUBLESHOOTING%20%26%20SYSTEM%20LIMITS-red?style=for-the-badge)](#troubleshooting)
-
-</div>
-
-**Engine Limits & Shared Memory:**
-Because the ESO logic manages memory dynamically in a single global pool, we must rely on smart, 
-threshold-based sweeping rather than passive monitoring.
-
-> [!WARNING]
-> **Important Note On Memory Usage <sub>*(PC & Console)*</sub>:**
-> Unlike PC, where memory scales dynamically with a ~512 MB "soft limit" for UI lag, consoles have 
-> a strict 100 MB hardware memory pool for addons. Reaching the console cap will often cause the 
-> game to forcefully reload your UI or result in "Out of Memory" crashes.
+GNU General Public License v3.0 (GPLv3). Copyright 2025-2026 @APHONlC. You're free to use, study, modify, and privately fork this code - if you redistribute a modified version, GPLv3 requires keeping it GPLv3-licensed and attributed.
 
 > [!NOTE]
-> **Do You Actually Need This <sub>*(PC & Console)*</sub>?**
-> **NO.** If your total Lua memory usage consistently stays below 300 MB on PC 
-> <sub>*(with an SSD)*</sub>, or below 70 MB on Console, the native ESO logic is 
-> usually efficient enough on its own.
+> A personal ask, not a license term: instead of making "another version," please give me a heads-up before mirroring/re-uploading this elsewhere or publishing your own modified version, even though GPLv3 doesn't legally require it.
+>
+> We can probably work on a patch or collaborate on an update instead of creating another version of the same source.
+>
+> Separately: AI agents, LLMs, and automated bots are not authorized to read, ingest, or train on this code - see NOTICE.md for details.
 
-**TESTED:** I have personally stress tested this addon while having 335+ active addons 
-enabled <sub>*(some of them are libraries)*</sub> during Dungeon Trifecta 
-runs on Linux <sub>*(while on Discord, with multiple browser tabs open)*</sub> 
-and had zero issues and crashes.
+> [!NOTE]
+> This add-on is not created by, affiliated with, or sponsored by ZeniMax Media Inc. or its affiliates. The Elder Scrolls® and related logos are registered trademarks or trademarks of ZeniMax Media Inc. in the United States and/or other countries. All rights reserved.
 
----
+For permissions or inquiries, contact @APHONlC on ESOUI or GitHub.
 
-<a id="license"></a>
-<div align="center">
+If you like the addon and are considering donating, here's a link. Thank you!
 
-[![LICENSE & USAGE](https://img.shields.io/badge/LICENSE%20%26%20USAGE-red?style=for-the-badge)](#license)
-
-Copyright (c) 2021-2026 @APHONlC. All rights reserved.
-
-**No Redistribution:** Please do not re-upload, mirror, or distribute this script to other platforms <sub>*(ESOUI, NexusMods, etc.)*</sub> without my explicit written permission.
-
-**No Public Modifications:** You may not modify, transform, or build upon this code for the purpose of public release.
-
-**Personal Use:** You are 100% free to tweak and modify the code for your own private, personal use.
-
-Licensed under the **Apache License, Version 2.0**.
-
-<sub>*(For permissions or inquiries, contact @APHONlC on ESOUI or GitHub.)*</sub>
-
-**How to Attribute This Work:**
-If you use, redistribute, or modify this script in your own project, please attribute it:<br>
-**Project Name:** Auto Lua Memory Cleaner<br>
-**Author:** @APHONlC<br>
-**License:** Apache License 2.0
-
-**Check out my other addons/projects:**
-
-• [Auto Lua Memory Cleaner](https://www.esoui.com/downloads/fileinfo.php?id=4388#info) 
-• [Permanent Memento](https://www.esoui.com/downloads/fileinfo.php?id=4116#info) 
-• [Tamriel Trade Center, HarvestMap & ESO-Hub Auto-Updater <sub>*(Linux, macOS, SteamDeck, & Windows)*</sub>](https://www.esoui.com/downloads/fileinfo.php?id=3249#info)
-
-If this project has been useful to you, consider supporting its development:<br>
-<br>
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/aph0nlc)
-
-<br>
-<a id="bug-reports"></a>
-
-[![BUG REPORTS](https://img.shields.io/badge/BUG%20REPORTS-ff3300?style=for-the-badge)](#bug-reports)
-
-If you encounter any issues, please submit a report here:<br>
-**[ESOUI Bug Portal](https://www.esoui.com/portal.php?id=360&a=listbugs) | 
-[GitHub Issue Tracker](https://github.com/MPHONlC/Auto-Lua-Memory-Cleaner/issues)**
-
-</div>
+[![Buy Me A Coffee](https://img.shields.io/badge/Support-Buy%20Me%20A%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/aph0nlc)
