@@ -166,7 +166,6 @@ end
 
 function ALC.get_settings_library()
     local lam_v, lam_e = LibAPH.CheckLibraryVersion("LibAddonMenu-2.0")
-    -- LHAS doesn't matter on PC, don't even scan for it there
     local lhas_v, lhas_e = 0, false
     if IsConsoleUI() then
         lhas_v, lhas_e = LibAPH.CheckLibraryVersion("LibHarvensAddonSettings")
