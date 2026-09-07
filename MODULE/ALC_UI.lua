@@ -40,15 +40,12 @@ end
 
 function ALC.update_ui()
     if not ALC.settings.show_ui then return end
-
     local current_lua = ALC.get_hybrid_memory_data()
     local pool_mb = ALC.get_console_pool_mb()
     local combat_str = IsUnitInCombat("player") and ("|cFF0000" .. ALC.L("LABEL_COMBAT") .. "|r ") or ""
-
     local status_line = ALC.build_memory_status_line(
         current_lua, ALC.session_mb_freed, pool_mb, ALC.session_pool_mb_freed
     )
-
     ALC.ui_label:SetText(combat_str .. status_line)
     ALC.ui_window:SetDimensions(ALC.ui_label:GetTextWidth() + 20, 40)
 end

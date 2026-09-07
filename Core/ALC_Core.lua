@@ -165,28 +165,11 @@ function ALC.get_platform_str()
 end
 
 function ALC.get_settings_library()
-    local am = GetAddOnManager()
-    local lam_v, lam_e = 0, false
+    local lam_v, lam_e = LibAPH.CheckLibraryVersion("LibAddonMenu-2.0")
+    -- LHAS doesn't matter on PC, don't even scan for it there
     local lhas_v, lhas_e = 0, false
-    for i = 1, am:GetNumAddOns() do
-        local name, _, _, _, _, state = am:GetAddOnInfo(i)
-        local is_en = (state == ADDON_STATE_ENABLED)
-        if name == "LibAddonMenu-2.0" then
-            local v = am:GetAddOnVersion(i)
-            if is_en then
-                lam_v = math.max(lam_v, v); lam_e = true
-            elseif not lam_e then
-                lam_v = math.max(lam_v, v)
-            end
-        elseif IsConsoleUI() and name == "LibHarvensAddonSettings" then
-            -- LHAS doesn't matter on PC, don't even scan for it there
-            local v = am:GetAddOnVersion(i)
-            if is_en then
-                lhas_v = math.max(lhas_v, v); lhas_e = true
-            elseif not lhas_e then
-                lhas_v = math.max(lhas_v, v)
-            end
-        end
+    if IsConsoleUI() then
+        lhas_v, lhas_e = LibAPH.CheckLibraryVersion("LibHarvensAddonSettings")
     end
     return lam_v, lam_e, lhas_v, lhas_e
 end
