@@ -11,23 +11,21 @@
 
 </div>
 
-Most memory cleaners run a fixed-interval `OnUpdate` timer that pings your memory every few seconds, looping endlessly from the moment you log in. Some of them do skip the check while you're in combat, but not all of them do - and some still print a memory info line on that same timer regardless of combat state or whether you're even looking at the UI. Most are also built before console APIs existed, and only track `collectgarbage` (ignoring console UI limits).
+## Dependencies
 
-Auto Lua Memory Cleaner is event-driven first: real triggers (exiting combat, entering a menu, a low-memory warning) do almost all the work. There's still a lightweight ~5-second fallback poll running in the background (one cheap number comparison, not a full scan or UI rebuild) to catch you standing around doing nothing else, but that's a fraction of the constant polling most other memory cleaners run outright.
+Requires **LibAPH** (shared helper library, hard dependency).
 
+Optionally uses:
+- **LibAddonMenu-2.0:** required for the PC Settings Menu.
+- **LibHarvensAddonSettings:** required for the Console/Gamepad Settings Menu.
+
+Without the optional dependencies, the addon still runs entirely independently and can be controlled via built-in slash commands as a standalone utility.
 
 ## Why use this over other memory cleaners?
 
-- **Near-Zero Idle Footprint.** Most checks run only on real triggers - loading screens, exiting combat state, entering a menu - backed by a lightweight ~5-second fallback poll (one cheap number check, not a full scan) so idle time standing around is still covered without a heavy constant loop.
-- **Smart combat lockout.** Blocks the automatic threshold-based cleanup from running while you're in combat or dead, so there's no mid-fight frame drops - the only exception is a genuine low-memory emergency, where the bigger risk is an outright crash.
-- **PC & Console aware.** PC watches the Lua heap against a ~512 MB soft limit; Console watches the strict 100 MB hardware addon-memory pool and can auto-reload after travel to actually clear it (a plain GC pass never touches that figure, only a reload does).
-- **Double-pass sweep.** Runs two back-to-back `collectgarbage("collect")` passes so pending `__gc` hooks and orphaned weak tables actually get cleared, not just queued.
+Most memory cleaners run a fixed-interval `OnUpdate` timer that pings your memory every few seconds, looping endlessly from the moment you log in. Some of them do skip the check while you're in combat, but not all of them do - and some still print a memory info line on that same timer regardless of combat state or whether you're even looking at the UI. Most are also built before console APIs existed, and only track `collectgarbage` (ignoring console UI limits).
 
-## Install
-
-Drop the `AutoLuaMemoryCleaner` folder into your `AddOns` directory. `LibAPH` is a hard dependency: install it too (drop its own folder into `AddOns`) or ALC won't load.
-
-Optional: `LibAddonMenu-2.0` (PC settings menu) or `LibHarvensAddonSettings` (Console/Gamepad settings menu). Without either, ALC still runs standalone via slash commands.
+Auto Lua Memory Cleaner is event-driven first: real triggers (exiting combat, entering a menu, a low-memory warning) do almost all the work. There's still a lightweight ~5-second fallback poll running in the background (one cheap number comparison, not a full scan or UI rebuild) to catch you standing around doing nothing else, but that's a fraction of the constant polling most other memory cleaners run outright.
 
 ## Features
 
@@ -63,17 +61,27 @@ Optional: `LibAddonMenu-2.0` (PC settings menu) or `LibHarvensAddonSettings` (Co
 | <kbd>/alcunloadmigration</kbd> | Toggle unload the Migration module |
 | <kbd>/alcunloadui</kbd> | Toggle unload the UI module |
 
-## Do you actually need this?
+## System Limits
+
+**Engine Limits & Shared Memory:** because the ESO engine manages memory dynamically in a single global pool, we must rely on smart, threshold-based sweeping rather than passive monitoring. Addons do not run in isolated sandboxes. They share a single global memory pool. It is technically impossible to accurately track memory usage per individual addon without breaking shared libraries and cross-addon communication.
+
+**Important Note On Memory Usage** <sub>*(PC & Console)*</sub>: unlike PC, where memory scales dynamically with a ~512 MB "soft limit" for UI lag, consoles have a strict 100 MB hardware memory pool for addons. Reaching the console cap will often cause the game to forcefully reload your UI or result in "Out of Memory" crashes.
+
+> [!WARNING]
+> While this addon is highly effective at clearing out background "garbage" to keep you under those limits, it cannot magically lower your memory usage if you are running too many heavy addons at once. If your memory remains dangerously high even after a manual cleanup, you should consider disabling a few large addons to ensure stability.
+
+### Do You Actually Need This? <sub>*(PC & Console)*</sub>
 
 > [!IMPORTANT]
-> If your total Lua memory usage consistently stays below 300 MB on PC (with an SSD), or below 70 MB on Console, the native ESO engine is usually efficient enough on its own. This addon is built for power users running dozens of heavy addons, Console players already pushing the 100 MB hardware cap, and anyone who wants manual control over when memory gets cleared.
+> **NO.** If your total Lua memory usage consistently stays below 300 MB on PC *(with an SSD)*, or below 70 MB on Console, the native ESO engine is usually efficient enough on its own. This addon is specifically built for:
 
-> [!IMPORTANT]
-> This addon can't lower your memory usage if you're simply running too many heavy addons at once. It can only clear out background garbage faster and more predictably than the engine does on its own.
+- **Power Users:** players with dozens of heavy addons pushing memory limits.
+- **Console Players:** players already pushing to the 100 MB hardware cap.
+- **Performance Freaks / Low-End Users:** anyone wanting manual control over when memory is cleared.
 
 ## License
 
-GNU General Public License v3.0 (GPLv3). Copyright 2025-2026 @APHONlC. You're free to use, study, modify, and privately fork this code - if you redistribute a modified version, GPLv3 requires keeping it GPLv3-licensed and attributed.
+GNU General Public License v3.0 (GPLv3). Copyright 2025-2026 @APHONlC.
 
 > [!NOTE]
 > A personal ask, not a license term: instead of making "another version," please give me a heads-up before mirroring/re-uploading this elsewhere or publishing your own modified version, even though GPLv3 doesn't legally require it.
@@ -87,6 +95,17 @@ GNU General Public License v3.0 (GPLv3). Copyright 2025-2026 @APHONlC. You're fr
 
 For permissions or inquiries, contact @APHONlC on ESOUI or GitHub.
 
+**Check out my other addons/projects:**
+
+- [Auto Lua Memory Cleaner](https://www.esoui.com/downloads/fileinfo.php?id=4388#info)
+- [Permanent Memento](https://www.esoui.com/downloads/fileinfo.php?id=4116#info)
+- [Tamriel Trade Center, HarvestMap & ESO-Hub Auto-Updater](https://www.esoui.com/downloads/fileinfo.php?id=3249#info) <sub>*(Linux, macOS, SteamDeck, & Windows)*</sub>
+
 If you like the addon and are considering donating, here's a link. Thank you!
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Support-Buy%20Me%20A%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/aph0nlc)
+
+### Bug Reports
+
+If you encounter any issues, please submit a report here:
+[ESOUI Bug Portal](https://www.esoui.com/portal.php?id=360&a=listbugs) | [GitHub Issue Tracker](https://github.com/MPHONlC/Auto-Lua-Memory-Cleaner/issues)
