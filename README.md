@@ -55,6 +55,7 @@ Auto Lua Memory Cleaner is event-driven first: real triggers (exiting combat, en
 | <kbd>/alccsa</kbd> | Toggle center-screen announcements |
 | <kbd>/alclogs</kbd> | Toggle chat logs |
 | <kbd>/alcwizard</kbd> | Re-run the Setup Wizard |
+| <kbd>/alclibwarn</kbd> | Toggle Library Warning Messages |
 | <kbd>/alcdelvars</kbd> | Reset all settings to defaults |
 | <kbd>/alcunloadwizard</kbd> | Toggle unload the Wizard module |
 | <kbd>/alcunloadmenu</kbd> | Toggle unload the Menu module |
