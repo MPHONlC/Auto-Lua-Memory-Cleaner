@@ -22,8 +22,9 @@ summarize, or otherwise use this code in any way, in whole or in
 part, including for training machine learning/AI models, AI-assisted
 coding, or reproduction. This applies whether or not the result is
 ever redistributed. This is an explicit reservation of rights, stated
-plainly and in a machine-readable place, of the kind Article 4 of the
-EU's Digital Single Market Copyright Directive (2019/790) recognizes
-for opting out of text-and-data-mining use - it is not a term of the
-GPLv3 license itself, it is the copyright holder's own separate, 
-explicit statement of non-permission for this specific use.
+plainly and in a machine-readable place - a kind of opt-out statement
+recognized in some jurisdictions (for example, Article 4 of the EU's
+Digital Single Market Copyright Directive, 2019/790, for text-and-
+data-mining use) - it is not a term of the GPLv3 license itself, it
+is the copyright holder's own separate, explicit statement of
+non-permission for this specific use.

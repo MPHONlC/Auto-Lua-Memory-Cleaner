@@ -53,32 +53,6 @@ function ALC.Console.build_extra_options(build_data)
     })
 end
 
-function ALC.check_console_lhas_warning()
-    if not IsConsoleUI() then return end
-    local _, _, lhas_ver, lhas_en = ALC.get_settings_library()
-    if lhas_en then return end
-
-    local state = (lhas_ver == 0) and ALC.L("LHAS_STATE_NOT_INSTALLED") or ALC.L("LHAS_STATE_NOT_ENABLED")
-    local msg = ALC.L("LHAS_WARN_MSG", state)
-
-    if not ALC.settings.has_shown_lhas_warning then
-        local dialog_id = "ALC_MISSING_LHAS_WARN"
-        if not ESO_Dialogs[dialog_id] then
-            ESO_Dialogs[dialog_id] = {
-                canQueue = true,
-                gamepadInfo = { dialogType = GAMEPAD_DIALOGS.BASIC },
-                title = { text = "|cFF0000" .. ALC.L("LHAS_WARN_TITLE") .. "|r" },
-                mainText = { text = msg .. "\n\n" .. ALC.L("LHAS_WARN_BODY_SUFFIX") },
-                buttons = { { text = ALC.L("BTN_ACKNOWLEDGE_CLOSE"), keybind = "DIALOG_PRIMARY",
-                    callback = function() ALC.settings.has_shown_lhas_warning = true end } }
-            }
-        end
-        zo_callLater(function() ZO_Dialogs_ShowGamepadDialog(dialog_id) end, 2500)
-    end
-
-    zo_callLater(function() ALC.safe_csa(ALC.L("CSA_TITLE_SETTINGS_UNAVAILABLE"), msg) end, 4500)
-end
-
 function ALC.Console.create_gamepad_mover(target)
     return LibAPH.CreateGamepadMover(target)
 end
