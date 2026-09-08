@@ -11,14 +11,12 @@ Technical Style & Logic
 
 Memory Pool Cleanup
   - Added Auto Pool Cleanup After Travel - watches for you traveling and reloads the UI afterward if the addon memory pool is worth clearing, or if you set a specific custom threshold for clearing.
-  - Added extra safety checks before Auto Pool Cleanup After Travel reloads your UI (cancels if you're back in combat, dead, or a new loading screen started).
   - Improved the accuracy of the Pool Cleanup report with an adaptive re-check instead of a fixed delay.
 
 UI & Console Updates
   - Added a Setup Wizard on first install to ask your preferences.
   - Added LibHarvensAddonSettings support for the console Settings Menu.
   - Fixed Chat output on console for slash commands.
-  - Fixed the Chat Logs toggle (/alclogs) being PC-only - it now works on console too, and added a proper settings-menu checkbox for it on both platforms.
 
 General Additions
   - Updated Bug Report.
