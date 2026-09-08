@@ -65,6 +65,11 @@ function ALC.register_slash_commands()
         d("|c00FFFF[ALC]|r " .. ALC.L("CHAT_POOL_RELOAD_TOGGLE", ALC.settings.auto_clear_pool_on_teleport and ALC.L("WORD_ON") or ALC.L("WORD_OFF")))
     end
 
+    SLASH_COMMANDS["/alclibwarn"] = function()
+        ALC.settings.is_lib_warning_enabled = not ALC.settings.is_lib_warning_enabled
+        d("|c00FFFF[ALC]|r " .. ALC.L("CHAT_LIBWARN_TOGGLE", ALC.settings.is_lib_warning_enabled and ALC.L("WORD_ON") or ALC.L("WORD_OFF")))
+    end
+
     SLASH_COMMANDS["/alcdelvars"] = function()
         d("|cFF0000[ALC] " .. ALC.L("CHAT_WIPING_SETTINGS") .. "|r")
         ALC.reset_to_defaults()

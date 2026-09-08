@@ -35,18 +35,6 @@ function ALC.build_lam2_menu()
     local lam_ver, lam_en = ALC.get_settings_library()
     if not lam_en or lam_ver < 30 then return end
 
-    if lam_ver >= 30 and lam_ver < ALC.REQUIRED_LAM_VERSION then
-        zo_callLater(function()
-            local warn_msg = "|cFFFF00" .. ALC.L("WARN_LAM_OUTDATED", lam_ver, ALC.REQUIRED_LAM_VERSION) .. "|r"
-            ALC.chat:Print(warn_msg, "FF0000")
-            local p = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(
-                CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE
-            )
-            p:SetText(warn_msg); p:SetLifespanMS(4000)
-            CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(p)
-        end, 4000)
-    end
-
     local is_eu_server = (GetWorldName() == "EU Megaserver")
     local is_pad = IsConsoleUI() or IsInGamepadPreferredMode()
     local is_dev = (GetDisplayName() == "@APHONlC")
@@ -75,7 +63,6 @@ function ALC.build_lam2_menu()
             name = function()
                 return "|c00FFFF" .. ALC.L("MENU_MAIL") .. "|r @|ca500f3A|r|cb400e6P|r|cc300daH|r|cd200cdO|r|ce100c1NlC|r"
             end,
-            tooltip = function() return ALC.L("TOOLTIP_MAIL") end,
             func = function()
                 SCENE_MANAGER:Show("mailSend")
                 zo_callLater(function()
@@ -91,7 +78,6 @@ function ALC.build_lam2_menu()
     table.insert(build_data, {
         type = "button",
         name = function() return "|cFF0000" .. ALC.L("MENU_BUG_REPORT") .. "|r" end,
-        tooltip = function() return ALC.L("TOOLTIP_BUG_REPORT", "https://www.esoui.com/portal.php?id=360&a=bugreport") end,
         func = function()
             if not is_pad then
                 RequestOpenUnsafeURL("https://www.esoui.com/portal.php?id=360&a=bugreport")
@@ -320,32 +306,40 @@ function ALC.build_lam2_menu()
         })
     end
 
+    local adv_controls = {
+        {
+            type = "button",
+            name = function() return "|c00FFFF" .. ALC.L("MENU_MANUAL_CLEANUP") .. "|r" end,
+            func = function() ALC.run_manual_cleanup(true) end,
+            width = "full"
+        }
+    }
+    if ALC._modules.wizard then
+        table.insert(adv_controls, {
+            type = "button",
+            name = function() return "|c00FFFF" .. ALC.L("MENU_RUN_WIZARD") .. "|r" end,
+            func = function() ALC.call_optional(ALC.run_wizard, "Wizard module (run_wizard)") end,
+            width = "full"
+        })
+    end
+    table.insert(adv_controls, {
+        type = "button",
+        name = function() return "|cFF0000" .. ALC.L("MENU_RESET_DEFAULTS") .. "|r" end,
+        func = ALC.reset_to_defaults,
+        width = "full"
+    })
+    table.insert(adv_controls, {
+        type = "checkbox",
+        name = function() return ALC.L("CHK_LIB_WARNING_ENABLED") end,
+        getFunc = function() return ALC.settings.is_lib_warning_enabled end,
+        setFunc = function(v) ALC.settings.is_lib_warning_enabled = v end
+    })
+
     table.insert(build_data, {
         type = "submenu",
         name = function() return "|cFF0000" .. ALC.L("HEADER_ADVANCED_SETTINGS") .. "|r" end,
         reference = "ALC_Submenu_Advanced",
-        controls = {
-            {
-                type = "button",
-                name = function() return "|c00FFFF" .. ALC.L("MENU_MANUAL_CLEANUP") .. "|r" end,
-                func = function() ALC.run_manual_cleanup(true) end,
-                width = "full"
-            },
-            {
-                type = "button",
-                name = function() return "|c00FFFF" .. ALC.L("MENU_RUN_WIZARD") .. "|r" end,
-                func = function() ALC.call_optional(ALC.run_wizard, "Wizard module (run_wizard)") end,
-                width = "full",
-                disabled = function() return ALC._modules.wizard == false end
-            },
-            {
-                type = "button",
-                name = function() return "|cFF0000" .. ALC.L("MENU_RESET_DEFAULTS") .. "|r" end,
-                tooltip = function() return "|cFF0000" .. ALC.L("TOOLTIP_RESET_DEFAULTS") .. "|r" end,
-                func = ALC.reset_to_defaults,
-                width = "full"
-            }
-        }
+        controls = adv_controls
     })
 
     table.insert(build_data, {
@@ -412,38 +406,19 @@ function ALC.build_lam2_menu()
     ALC.lam_panel = lib_lam:RegisterAddonPanel("AutoLuaCleanerOptions", menu_header)
     lib_lam:RegisterOptionControls("AutoLuaCleanerOptions", build_data)
 
-    local function wire_submenu_persistence(ref_name, save_key)
-        local subctrl = _G[ref_name]
-        if not subctrl then return end
-
-        if ALC.settings.submenu_open[save_key] then
-            subctrl.open = true
-            subctrl.animation:PlayFromStart()
-        end
-
-        local function toggle_and_save(clicked)
-            local ctrl = clicked:GetParent()
-            if ctrl.disabled then return end
-            ctrl.open = not ctrl.open
-            if ctrl.open then ctrl.animation:PlayFromStart() else ctrl.animation:PlayFromEnd() end
-            ALC.settings.submenu_open[save_key] = ctrl.open
-        end
-
-        subctrl.label:SetHandler("OnMouseUp", toggle_and_save)
-        if subctrl.icon then subctrl.icon:SetHandler("OnMouseUp", toggle_and_save) end
-        if subctrl.btmToggle then subctrl.btmToggle:SetHandler("OnMouseUp", toggle_and_save) end
-    end
+    local persisted_submenus = {
+        "ALC_Submenu_UIConfig", "ALC_Submenu_Language",
+        "ALC_Submenu_Advanced", "ALC_Submenu_ModuleManager"
+    }
 
     local function on_panel_controls_created(panel)
         if panel ~= ALC.lam_panel then return end
         CALLBACK_MANAGER:UnregisterCallback("LAM-PanelControlsCreated", on_panel_controls_created)
-        wire_submenu_persistence("ALC_Submenu_Cleanup", "cleanup")
-        wire_submenu_persistence("ALC_Submenu_UIConfig", "ui_config")
-        wire_submenu_persistence("ALC_Submenu_ClientInfo", "client_info")
-        wire_submenu_persistence("ALC_Submenu_Language", "language")
-        wire_submenu_persistence("ALC_Submenu_Advanced", "advanced")
-        wire_submenu_persistence("ALC_Submenu_ModuleManager", "module_manager")
-        wire_submenu_persistence("ALC_Submenu_CommandsInfo", "commands_info")
+        if not is_pad then
+            for _, ref in ipairs(persisted_submenus) do
+                LibAPH.PersistSubmenuOpenState(ALC.settings.submenu_open, ref)
+            end
+        end
         CALLBACK_MANAGER:RegisterCallback("LAM-RefreshPanel", ALC.refresh_control_labels)
     end
     CALLBACK_MANAGER:RegisterCallback("LAM-PanelControlsCreated", on_panel_controls_created)

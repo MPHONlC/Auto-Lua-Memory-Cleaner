@@ -20,6 +20,7 @@ ALC.COMMAND_CATEGORIES = {
         { cmd = "/alccsa", desc_key = "CMD_ALCCSA" },
         { cmd = "/alclogs", desc_key = "CMD_ALCLOGS", pc_only = true },
         { cmd = "/alcwizard", desc_key = "CMD_ALCWIZARD", disabled_check = function() return ALC._modules.wizard == false end },
+        { cmd = "/alclibwarn", desc_key = "CMD_ALCLIBWARN" },
         { cmd = "/alcdelvars", desc_key = "CMD_ALCDELVARS" },
     }},
     { title_key = "CAT_MODULE_MANAGER", cmds = {

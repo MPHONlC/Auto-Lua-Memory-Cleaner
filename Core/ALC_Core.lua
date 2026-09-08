@@ -29,7 +29,7 @@ ALC = {
         ui_scale = 1.0,
         is_ui_global = false,
         has_shown_lib_warning_008 = false,
-        has_shown_lhas_warning = false,
+        is_lib_warning_enabled = true,
         wizard_completed = false,
         install_date = nil,
         last_version = nil,
@@ -54,12 +54,9 @@ ALC = {
     ui_update_fn = nil
 }
 
--- global so Menu.lua can read it
 ALC.REQUIRED_LAM_VERSION = 43
--- console-only presence check, not version requirement.
 ALC.REQUIRED_LHAS_VERSION = 20200
 
--- Module Manager
 ALC._modules = {}
 ALC.MODULE_FILE_FUNCS = {
     migration = { "migrate_data" },
@@ -95,8 +92,7 @@ end
 
 function ALC.reset_to_defaults()
     LibAPH.ResetToDefaults(ALC.settings, ALC.defaults, {
-        wizard_completed = true, has_shown_lib_warning_008 = true,
-        has_shown_lhas_warning = true
+        wizard_completed = true, has_shown_lib_warning_008 = true
     })
 end
 
@@ -197,7 +193,8 @@ function ALC.get_lua_status_color(mb)
     if mb >= 512 then return "|cFF0000" elseif mb >= 320 then return "|cFFA500" else return ALC.COLOR_LUA_ACTIVE end
 end
 function ALC.get_pool_status_color(mb)
-    if mb >= 100 then return "|cFF0000" elseif mb >= 60 then return "|cFFA500" else return ALC.COLOR_POOL_ACTIVE end
+    local cap = GetTotalUserAddOnMemoryPoolCapacityMB() or 100
+    if mb >= cap then return "|cFF0000" elseif mb >= cap * 0.6 then return "|cFFA500" else return ALC.COLOR_POOL_ACTIVE end
 end
 
 function ALC.build_memory_fragment(label, color, current_mb, cleaned_mb)
@@ -512,23 +509,34 @@ function ALC.get_language_display_name(code)
 end
 
 function ALC.show_missing_library_warning()
-    local lam_ver, lam_en = ALC.get_settings_library()
-    local lam_req = ALC.REQUIRED_LAM_VERSION
-    
-    local lam_state = (lam_ver == 0) and "Missing" or (not lam_en and "Not Enabled" or (lam_ver < lam_req and "Outdated" or "OK"))
-    
-    if lam_state == "OK" then return end
-    
+    if not ALC.settings.is_lib_warning_enabled then return end
+
+    local lam_ver, lam_en, lhas_ver, lhas_en = ALC.get_settings_library()
+
+    local libwarn_templates = {
+        missing = ALC.L("LIBWARN_MISSING"),
+        disabled = ALC.L("LIBWARN_DISABLED"),
+        old = ALC.L("LIBWARN_OLD"),
+    }
+
     local alerts = {}
-    if lam_state == "Missing" then table.insert(alerts, "|c00FFFFLibAddonMenu-2.0|r (Missing)")
-    elseif lam_state == "Not Enabled" then table.insert(alerts, string.format("|c00FFFFLibAddonMenu-2.0|r (Disabled) [%sv%d|r]", lam_ver >= lam_req and "|c00FF00" or "|cFF0000", lam_ver))
-    elseif lam_state == "Outdated" then table.insert(alerts, string.format("|c00FFFFLibAddonMenu-2.0|r (Outdated) [|cFF0000v%d|r]", lam_ver)) end
-    
+    local lam_alert = LibAPH.BuildLibraryWarning(libwarn_templates, "LibAddonMenu", "LAM", lam_ver, lam_en, ALC.REQUIRED_LAM_VERSION,
+        ALC.L("LIBWARN_CONSEQUENCE_LAM"))
+    if lam_alert then table.insert(alerts, lam_alert) end
+
+    if IsConsoleUI() then
+        local lhas_alert = LibAPH.BuildLibraryWarning(libwarn_templates, "LibHarvensAddonSettings", "LHAS", lhas_ver, lhas_en, ALC.REQUIRED_LHAS_VERSION,
+            ALC.L("LIBWARN_CONSEQUENCE_LHAS"))
+        if lhas_alert then table.insert(alerts, lhas_alert) end
+    end
+
+    if #alerts == 0 then return end
+
     if not ALC.settings.has_shown_lib_warning_008 then
         local dialog_id = "ALC_MISSING_LIBRARY_WARN"
         local popup_title = "|cFF0000" .. ALC.L("DIALOG_MISSING_LIBRARY_TITLE") .. "|r"
-        local popup_body = ALC.L("DIALOG_MISSING_LIBRARY_BODY") .. "\n\n" .. table.concat(alerts, "\n")
-                           
+        local popup_body = ALC.L("DIALOG_MISSING_LIBRARY_BODY") .. "\n\n" .. table.concat(alerts, "\n\n")
+
         local function on_ack()
             ALC.settings.has_shown_lib_warning_008 = true
             local tick_ms = GetGameTimeMilliseconds()
@@ -540,45 +548,28 @@ function ALC.show_missing_library_warning()
 
         if not ESO_Dialogs[dialog_id] then
             ESO_Dialogs[dialog_id] = {
-                canQueue = true, 
-                gamepadInfo = { dialogType = GAMEPAD_DIALOGS.BASIC }, 
-                title = { text = popup_title }, 
+                canQueue = true,
+                gamepadInfo = { dialogType = GAMEPAD_DIALOGS.BASIC },
+                title = { text = popup_title },
                 mainText = { text = popup_body },
                 buttons = { { text = ALC.L("BTN_ACKNOWLEDGE_CLOSE"), keybind = "DIALOG_PRIMARY", callback = on_ack } }
             }
         end
 
         zo_callLater(function()
-            if IsInGamepadPreferredMode() then ZO_Dialogs_ShowGamepadDialog(dialog_id) 
+            if IsInGamepadPreferredMode() then ZO_Dialogs_ShowGamepadDialog(dialog_id)
             else ZO_Dialogs_ShowDialog(dialog_id) end
         end, 2000)
     end
 
-    local csa_msg = ""
-    if lam_state == "Outdated" then csa_msg = string.format("Optional Dependency Enabled LibAddonMenu-2.0 Incorrect Version \"v%d\"", lam_ver)
-    else csa_msg = string.format("%s Optional Library LibAddonMenu-2.0!", lam_state) end
-    
-    local show_csa = true
-    local show_chat = true
-    
-    local correct_lam = (lam_state == "Not Enabled" and lam_ver >= lam_req)
-    
-    if correct_lam then
-        if IsConsoleUI() then
-            show_chat = false
-            show_csa = true
-        else
-            show_csa = false
-            show_chat = true
-        end
-    end
+    local combined_msg = table.concat(alerts, "\n")
 
     zo_callLater(function()
-        if show_chat then ALC.chat_error:Print(csa_msg) end
+        ALC.chat_error:Print(combined_msg)
 
-        if show_csa then
+        if not ALC.settings.has_shown_lib_warning_008 then
             local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
-            params:SetText("|cFF0000[ALC Error]|r " .. csa_msg)
+            params:SetText("|cFF0000" .. ALC.L("CSA_TITLE_SETTINGS_UNAVAILABLE") .. "|r", combined_msg)
             params:SetLifespanMS(10000)
             CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
         end
@@ -717,14 +708,8 @@ function ALC.init(event_code, addon_name)
     
     LibAPH.CheckSelfVersion(ALC.settings, ALC.version)
 
-    local lam_ver, lam_en = ALC.get_settings_library()
-    local is_lam_ok = (lam_en and lam_ver >= 30)
-    if not is_lam_ok then 
-        ALC.show_missing_library_warning() 
-    end
+    ALC.show_missing_library_warning()
 
-    ALC.call_optional(ALC.check_console_lhas_warning, "Console module (check_console_lhas_warning)")
-    
     ALC.session_mb_freed = 0
     ALC.session_pool_mb_freed = 0
     

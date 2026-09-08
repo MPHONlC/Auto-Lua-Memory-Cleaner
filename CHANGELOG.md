@@ -17,6 +17,9 @@ UI & Console Updates
   - Added a Setup Wizard on first install to ask your preferences.
   - Added LibHarvensAddonSettings support for the console Settings Menu.
   - Fixed Chat output on console for slash commands.
+  - Added a Library Warning Messages toggle to enable or disable the optional-library popup, screen announcement, and chat reminder on their own (/alclibwarn).
+  - Updated the optional-library chat and screen announcement messages to clearly state whether LibAddonMenu or LibHarvensAddonSettings is missing, disabled, or outdated, with the popup and screen announcement now shown only once instead of on every reload.
+  - Updated settings-menu submenus remembering whether they were left open or closed across a reload.
 
 General Additions
   - Updated Bug Report.
