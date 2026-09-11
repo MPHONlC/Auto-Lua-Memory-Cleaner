@@ -1,7 +1,7 @@
 AutoLuaMemoryCleaner - Changelog
 =================================
 
-Version: 0.0.9 (2026-09-04)
+Version: 0.0.9 (2026-09-11)
 ---------------------------
 
 Technical Style & Logic
@@ -11,7 +11,7 @@ Technical Style & Logic
 
 Memory Pool Cleanup
   - Added Auto Pool Cleanup After Travel - watches for you traveling and reloads the UI afterward if the addon memory pool is worth clearing, or if you set a specific custom threshold for clearing.
-  - Improved the accuracy of the Pool Cleanup report with an adaptive re-check instead of a fixed delay.
+  - Improved the accuracy of the Pool Cleanup report with an adaptive re-check.
 
 UI & Console Updates
   - Added a Setup Wizard on first install to ask your preferences.
