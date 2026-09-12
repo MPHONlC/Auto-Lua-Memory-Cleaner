@@ -29,45 +29,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check confirmation
-        run: |
-          if [ "${{ inputs.confirm }}" != "REWRITE" ]; then
-            echo "::error title=Aborted::Type REWRITE to confirm - nothing was changed."
-            exit 1
-          fi
-
       - name: Checkout (full history)
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Install git-filter-repo
-        run: pip install --quiet git-filter-repo
-
-      - name: Rewrite matching commits to the real identity
-        run: |
-          git filter-repo --force --commit-callback "
-          if commit.author_email == b'${{ inputs.bot_login }}':
-              commit.author_name = b'${{ inputs.new_name }}'
-              commit.author_email = b'${{ inputs.new_email }}'
-          if commit.committer_email == b'${{ inputs.bot_login }}':
-              commit.committer_name = b'${{ inputs.new_name }}'
-              commit.committer_email = b'${{ inputs.new_email }}'
-          "
-
-      - name: Push rewritten history
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          git remote add origin "https://x-access-token:${TOKEN}@github.com/${REPO}.git"
-          git push --force-with-lease origin --all
-          git push --force-with-lease origin --tags
-
-      - name: Annotate success
-        if: success()
-        run: echo "::notice title=History Rewrite Complete::Rewrote bot commits to ${{ inputs.new_name }} and force-pushed. Contributors graph updates in a few minutes."
-
-      - name: Annotate failure
-        if: failure()
-        run: echo "::error title=History Rewrite Failed::Check the step logs above. If main has branch protection blocking force-pushes, disable it under Settings, Branches, re-run, then re-enable it."
+      - uses: MPHONlC/fix-bot-contributor@v1
+        with:
+          confirm: ${{ inputs.confirm }}
+          bot_login: ${{ inputs.bot_login }}
+          new_name: ${{ inputs.new_name }}
+          new_email: ${{ inputs.new_email }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
