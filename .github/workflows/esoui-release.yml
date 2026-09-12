@@ -25,8 +25,12 @@ jobs:
         id: version
         run: |
           VER=$(grep "^## AddOnVersion:" AutoLuaMemoryCleaner.addon | awk '{print $3}')
-          echo "Read version: $VER"
+          DISPLAY_VER=$(grep "^## Version:" AutoLuaMemoryCleaner.addon | awk '{print $3}')
+          API_VER=$(grep "^## APIVersion:" AutoLuaMemoryCleaner.addon | awk '{print $3, $4}')
+          echo "Read version: $VER (display: $DISPLAY_VER, API: $API_VER)"
           echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "display_version=$DISPLAY_VER" >> "$GITHUB_OUTPUT"
+          echo "api_version=$API_VER" >> "$GITHUB_OUTPUT"
 
       - name: Build addon zip (excludes anything in .build-ignore)
         run: |
@@ -37,10 +41,11 @@ jobs:
 
       - name: Extract latest changelog entry (for the GitHub Release body)
         run: |
-          awk '/^Version: / { if (found) exit; found=1 } found' CHANGELOG.md > latest_changes.md
+          awk '/^### Version / { if (found) exit; found=1 } found' CHANGELOG_GITHUB.txt > latest_changes.md
           cat latest_changes.md
 
       - name: Test upload to ESOUI (dry run - always runs)
+        id: dry_test
         uses: m00nyONE/esoui-upload@main
         with:
           api_key: ${{ secrets.ESOUI_API_KEY }}
@@ -51,12 +56,34 @@ jobs:
           description_file: 'README_ESOUI.txt'
           test: true
 
+      - name: Annotate test result
+        if: always()
+        run: |
+          STATUS="${{ steps.dry_test.outcome }}"
+          if [ "$STATUS" == "success" ]; then
+            TITLE="Test Release Complete"
+          else
+            TITLE="Test Release Failed"
+          fi
+          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}."
+          {
+            echo "## $TITLE"
+            echo ""
+            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
+            echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
+            echo ""
+            echo "### Changelog"
+            echo '```'
+            cat latest_changes.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Create GitHub Release (only if real_upload was checked)
         if: inputs.real_upload == true
         uses: ncipollo/release-action@v1
         with:
-          name: ${{ steps.version.outputs.version }}
-          tag: ${{ steps.version.outputs.version }}
+          name: Version-${{ steps.version.outputs.display_version }}
+          tag: Version-${{ steps.version.outputs.display_version }}
           artifacts: ${{ env.zip_file }}
           artifactContentType: application/zip
           bodyFile: latest_changes.md
@@ -64,6 +91,7 @@ jobs:
           makeLatest: true
 
       - name: Upload to ESOUI (real - only if real_upload was checked)
+        id: real_upload
         if: inputs.real_upload == true
         uses: m00nyONE/esoui-upload@main
         with:
@@ -73,3 +101,25 @@ jobs:
           zip_file: ${{ env.zip_file }}
           changelog_file: 'CHANGELOG_ESOUI.txt'
           description_file: 'README_ESOUI.txt'
+
+      - name: Annotate release result
+        if: always() && inputs.real_upload == true
+        run: |
+          STATUS="${{ steps.real_upload.outcome }}"
+          if [ "$STATUS" == "success" ]; then
+            TITLE="Release Complete"
+          else
+            TITLE="Release Failed"
+          fi
+          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}."
+          {
+            echo "## $TITLE"
+            echo ""
+            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
+            echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
+            echo ""
+            echo "### Changelog"
+            echo '```'
+            cat latest_changes.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
