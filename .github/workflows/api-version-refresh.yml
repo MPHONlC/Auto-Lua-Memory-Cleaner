@@ -1,0 +1,49 @@
+name: API Version Refresh
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # once a day, 12:00 UTC
+  workflow_dispatch:
+
+jobs:
+  refresh-api-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check esoui/esoui for the current live API version
+        run: |
+          MANIFEST="AutoLuaMemoryCleaner.addon"
+
+          README_CONTENT=$(curl -sL "https://raw.githubusercontent.com/esoui/esoui/live/README.md")
+          NEW_API=$(echo "$README_CONTENT" | grep -oP '\(API \K[0-9]+' | head -1)
+
+          CURRENT_LINE=$(grep "^## APIVersion:" "$MANIFEST")
+          CURRENT_FIRST=$(echo "$CURRENT_LINE" | awk '{print $3}')
+          CURRENT_SECOND=$(echo "$CURRENT_LINE" | awk '{print $4}')
+
+          echo "Current manifest line: $CURRENT_LINE"
+          echo "esoui/esoui reports:   API $NEW_API"
+
+          if ! [[ "$NEW_API" =~ ^[0-9]{5,7}$ ]]; then
+            echo "Could not extract a valid API version - aborting without changing anything."
+            exit 0
+          fi
+
+          if [ "$NEW_API" -le "$CURRENT_FIRST" ]; then
+            echo "No newer API version than what's already declared - nothing to do."
+            exit 0
+          fi
+
+          NEW_SECOND=$((NEW_API + 1))
+          sed -i "s/## APIVersion: $CURRENT_FIRST $CURRENT_SECOND/## APIVersion: $NEW_API $NEW_SECOND/" "$MANIFEST"
+          echo "Updated to: $(grep '^## APIVersion:' "$MANIFEST")"
+
+          git config user.name "MPHONlC"
+          git config user.email "207844175+MPHONlC@users.noreply.github.com"
+          git add "$MANIFEST"
+          git commit -m "chore: bump APIVersion to $NEW_API $NEW_SECOND (esoui/esoui reports API $NEW_API live)"
+          git push
