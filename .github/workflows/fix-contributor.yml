@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: MPHONlC/fix-bot-contributor@Version-0.0.3
+      - uses: MPHONlC/fix-bot-contributor@Version-0.0.4
         with:
           confirm: ${{ inputs.confirm }}
           bot_login: ${{ inputs.bot_login }}
