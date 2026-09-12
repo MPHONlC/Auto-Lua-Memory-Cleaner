@@ -31,8 +31,8 @@ jobs:
             exit 0
           fi
           sed -i "s/## AddOnVersion: $CURRENT/## AddOnVersion: $NEW/" "$MANIFEST"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "MPHONlC"
+          git config user.email "207844175+MPHONlC@users.noreply.github.com"
           git add "$MANIFEST"
           git commit -m "chore: refresh AddOnVersion date to $TODAY [skip ci]"
           git push
