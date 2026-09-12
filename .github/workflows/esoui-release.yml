@@ -2,6 +2,11 @@ name: ESOUI Release
 
 on:
   workflow_dispatch:
+    inputs:
+      real_upload:
+        description: "Also do the REAL upload + create a GitHub Release? Leave unchecked to just test."
+        type: boolean
+        default: false
 
 jobs:
   check:
@@ -10,6 +15,8 @@ jobs:
   release:
     needs: check
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -28,21 +35,41 @@ jobs:
           cd /tmp/build && zip -r AutoLuaMemoryCleaner.zip AutoLuaMemoryCleaner
           echo "zip_file=/tmp/build/AutoLuaMemoryCleaner.zip" >> "$GITHUB_ENV"
 
-      - name: Test upload to ESOUI (dry run)
+      - name: Extract latest changelog entry (for the GitHub Release body)
+        run: |
+          awk '/^Version: / { if (found) exit; found=1 } found' CHANGELOG.md > latest_changes.md
+          cat latest_changes.md
+
+      - name: Test upload to ESOUI (dry run - always runs)
         uses: m00nyONE/esoui-upload@main
         with:
           api_key: ${{ secrets.ESOUI_API_KEY }}
           addon_id: '4388'
           version: ${{ steps.version.outputs.version }}
           zip_file: ${{ env.zip_file }}
-          changelog_file: 'CHANGELOG.md'
+          changelog_file: 'CHANGELOG_ESOUI.txt'
+          description_file: 'README_ESOUI.txt'
           test: true
 
-      - name: Upload to ESOUI
+      - name: Create GitHub Release (only if real_upload was checked)
+        if: inputs.real_upload == true
+        uses: ncipollo/release-action@v1
+        with:
+          name: ${{ steps.version.outputs.version }}
+          tag: ${{ steps.version.outputs.version }}
+          artifacts: ${{ env.zip_file }}
+          artifactContentType: application/zip
+          bodyFile: latest_changes.md
+          allowUpdates: true
+          makeLatest: true
+
+      - name: Upload to ESOUI (real - only if real_upload was checked)
+        if: inputs.real_upload == true
         uses: m00nyONE/esoui-upload@main
         with:
           api_key: ${{ secrets.ESOUI_API_KEY }}
           addon_id: '4388'
           version: ${{ steps.version.outputs.version }}
           zip_file: ${{ env.zip_file }}
-          changelog_file: 'CHANGELOG.md'
+          changelog_file: 'CHANGELOG_ESOUI.txt'
+          description_file: 'README_ESOUI.txt'
