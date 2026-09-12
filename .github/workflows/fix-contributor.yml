@@ -32,7 +32,7 @@ jobs:
       - name: Check confirmation
         run: |
           if [ "${{ inputs.confirm }}" != "REWRITE" ]; then
-            echo "::error title=Aborted::Confirmation text didn't match as changed. Re-run and type REWRITE (all caps) to proceed."
+            echo "::error title=Aborted::Type REWRITE to confirm - nothing was changed."
             exit 1
           fi
 
@@ -56,18 +56,18 @@ jobs:
           "
 
       - name: Push rewritten history
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          git remote add origin "https://x-access-token:${{ secrets.GITHthub.repository }}.git"
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${REPO}.git"
           git push --force-with-lease origin --all
           git push --force-with-lease origin --tags
 
-      - name: Annotate result
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "::notice title=History Rewrite Complete::Commits autho} were rewritten to ${{ inputs.new_name }} and force-pushed. GitHub's
-Contributors graph re-scans automatically - it may take a few minutes tolone of this repo needs to re-clone or hard-reset, since all commit SHAs
-from the affected commits onward have changed."
-          else
-            echo "::error title=History Rewrite Failed::Check the step lbranch protection on main blocking force-pushes - if so, temporarilydisable 'Restrict force pushes' under Settings > Branches, re-run this w
-          fi
+      - name: Annotate success
+        if: success()
+        run: echo "::notice title=History Rewrite Complete::Rewrote bot commits to ${{ inputs.new_name }} and force-pushed. Contributors graph updates in a few minutes."
+
+      - name: Annotate failure
+        if: failure()
+        run: echo "::error title=History Rewrite Failed::Check the step logs above. If main has branch protection blocking force-pushes, disable it under Settings, Branches, re-run, then re-enable it."
