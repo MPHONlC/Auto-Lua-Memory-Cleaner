@@ -9,11 +9,7 @@ on:
   workflow_call:
 
 jobs:
-  check:
-    uses: ./.github/workflows/lua-check.yml
-
   refresh-version:
-    needs: check
     runs-on: ubuntu-latest
     permissions:
       contents: write
