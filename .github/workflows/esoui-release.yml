@@ -22,10 +22,14 @@ jobs:
 
   refresh-version:
     needs: check
+    permissions:
+      contents: write
     uses: ./.github/workflows/version-refresh.yml
 
   refresh-api-version:
     needs: [check, refresh-version]
+    permissions:
+      contents: write
     uses: ./.github/workflows/api-version-refresh.yml
 
   release:
