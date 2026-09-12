@@ -1,0 +1,48 @@
+name: ESOUI Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    uses: ./.github/workflows/lua-check.yml
+
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read version from manifest
+        id: version
+        run: |
+          VER=$(grep "^## AddOnVersion:" AutoLuaMemoryCleaner.addon | awk '{print $3}')
+          echo "Read version: $VER"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Build addon zip (excludes anything in .build-ignore)
+        run: |
+          mkdir -p /tmp/build/AutoLuaMemoryCleaner
+          rsync -a --exclude-from=.build-ignore ./ /tmp/build/AutoLuaMemoryCleaner/
+          cd /tmp/build && zip -r AutoLuaMemoryCleaner.zip AutoLuaMemoryCleaner
+          echo "zip_file=/tmp/build/AutoLuaMemoryCleaner.zip" >> "$GITHUB_ENV"
+
+      - name: Test upload to ESOUI (dry run)
+        uses: m00nyONE/esoui-upload@main
+        with:
+          api_key: ${{ secrets.ESOUI_API_KEY }}
+          addon_id: '4388'
+          version: ${{ steps.version.outputs.version }}
+          zip_file: ${{ env.zip_file }}
+          changelog_file: 'CHANGELOG.md'
+          test: true
+
+      - name: Upload to ESOUI
+        uses: m00nyONE/esoui-upload@main
+        with:
+          api_key: ${{ secrets.ESOUI_API_KEY }}
+          addon_id: '4388'
+          version: ${{ steps.version.outputs.version }}
+          zip_file: ${{ env.zip_file }}
+          changelog_file: 'CHANGELOG.md'
