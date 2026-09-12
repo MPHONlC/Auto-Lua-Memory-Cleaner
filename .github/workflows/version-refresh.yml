@@ -3,6 +3,9 @@ name: Version Refresh
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 12 * * *'   # once a day, 12:00 UTC
+  workflow_dispatch:
   workflow_call:
 
 jobs:
@@ -18,48 +21,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Refresh AddOnVersion date prefix only (never the version suffix)
-        id: refresh
-        run: |
-          MANIFEST="AutoLuaMemoryCleaner.addon"
-          TODAY=$(date +%y%m%d)
-          CURRENT=$(grep "^## AddOnVersion:" "$MANIFEST" | awk '{print $3}')
-          SUFFIX="${CURRENT: -3}"
-          NEW="${TODAY}${SUFFIX}"
-          echo "Current AddOnVersion: $CURRENT"
-          echo "New AddOnVersion:     $NEW"
-          echo "old=$CURRENT" >> "$GITHUB_OUTPUT"
-          echo "new=$NEW" >> "$GITHUB_OUTPUT"
-          if [ "$CURRENT" = "$NEW" ]; then
-            echo "Already up to date, nothing to commit."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          sed -i "s/## AddOnVersion: $CURRENT/## AddOnVersion: $NEW/" "$MANIFEST"
-          git config user.name "MPHONlC"
-          git config user.email "207844175+MPHONlC@users.noreply.github.com"
-          git add "$MANIFEST"
-          git commit -m "chore: refresh AddOnVersion date to $TODAY [skip ci]"
-          git push
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Annotate result
-        if: always()
-        run: |
-          STATUS="${{ steps.refresh.outcome }}"
-          if [ "$STATUS" != "success" ]; then
-            TITLE="Version Refresh Failed"
-            echo "::error title=$TITLE::Check the 'Refresh AddOnVersion date prefix' step's log above."
-          elif [ "${{ steps.refresh.outputs.changed }}" == "true" ]; then
-            TITLE="Version Refresh Complete"
-            echo "::notice title=$TITLE::AddOnVersion updated from ${{ steps.refresh.outputs.old }} to ${{ steps.refresh.outputs.new }} and pushed."
-          else
-            TITLE="Version Already Up To Date"
-            echo "::notice title=$TITLE::AddOnVersion is already ${{ steps.refresh.outputs.old }} - nothing to change."
-          fi
-          {
-            echo "## $TITLE"
-            echo ""
-            echo "- **Previous AddOnVersion:** ${{ steps.refresh.outputs.old }}"
-            echo "- **Current AddOnVersion:** ${{ steps.refresh.outputs.new }}"
-          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: MPHONlC/eso-version-refresh@Version-0.0.1
+        with:
+          manifest_file: 'AutoLuaMemoryCleaner.addon'
+          git_name: 'MPHONlC'
+          git_email: '207844175+MPHONlC@users.noreply.github.com'
