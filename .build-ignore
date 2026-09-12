@@ -1,4 +1,7 @@
 .git
 .github
-.build-ignore
 .luacheckrc
+.build-ignore
+README_ESOUI.txt
+README_BETHESDA.txt
+CHANGELOG_ESOUI.txt
