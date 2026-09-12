@@ -62,15 +62,21 @@ jobs:
           STATUS="${{ steps.dry_test.outcome }}"
           if [ "$STATUS" == "success" ]; then
             TITLE="Test Release Complete"
+            DETAIL=""
           else
             TITLE="Test Release Failed"
+            DETAIL=" Check the 'Test upload to ESOUI' step's log above - an input problem (missing/invalid api_key, addon_id, zip, changelog or description file) shows its own annotation there. A rejection from ESOUI's server won't show a response body (the upload action's curl call discards it), so a failure with no other detail usually means the API key, addon ID, or version was rejected server-side."
           fi
-          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}."
+          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}.$DETAIL"
           {
             echo "## $TITLE"
             echo ""
             echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
             echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
+            if [ -n "$DETAIL" ]; then
+              echo ""
+              echo "${DETAIL# }"
+            fi
             echo ""
             echo "### Changelog"
             echo '```'
@@ -79,6 +85,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create GitHub Release (only if real_upload was checked)
+        id: gh_release
         if: inputs.real_upload == true
         uses: ncipollo/release-action@v1
         with:
@@ -105,18 +112,28 @@ jobs:
       - name: Annotate release result
         if: always() && inputs.real_upload == true
         run: |
-          STATUS="${{ steps.real_upload.outcome }}"
-          if [ "$STATUS" == "success" ]; then
+          GH_STATUS="${{ steps.gh_release.outcome }}"
+          UPLOAD_STATUS="${{ steps.real_upload.outcome }}"
+          if [ "$GH_STATUS" == "success" ] && [ "$UPLOAD_STATUS" == "success" ]; then
             TITLE="Release Complete"
+            DETAIL=""
+          elif [ "$GH_STATUS" != "success" ]; then
+            TITLE="Release Failed"
+            DETAIL=" GitHub Release creation failed - check the 'Create GitHub Release' step's log above (common causes: tag already exists on a different commit, bad artifact path, missing contents:write permission)."
           else
             TITLE="Release Failed"
+            DETAIL=" ESOUI upload failed - check the 'Upload to ESOUI (real)' step's log above. An input problem shows its own annotation there; a rejection from ESOUI's server won't show a response body (the upload action's curl call discards it), so a failure with no other detail usually means the API key, addon ID, or version was rejected server-side."
           fi
-          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}."
+          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}.$DETAIL"
           {
             echo "## $TITLE"
             echo ""
             echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
             echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
+            if [ -n "$DETAIL" ]; then
+              echo ""
+              echo "${DETAIL# }"
+            fi
             echo ""
             echo "### Changelog"
             echo '```'
