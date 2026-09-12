@@ -16,6 +16,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Check esoui/esoui for the current live API version
+        id: refresh
         run: |
           MANIFEST="AutoLuaMemoryCleaner.addon"
 
@@ -28,14 +29,17 @@ jobs:
 
           echo "Current manifest line: $CURRENT_LINE"
           echo "esoui/esoui reports:   API $NEW_API"
+          echo "current=$CURRENT_FIRST $CURRENT_SECOND" >> "$GITHUB_OUTPUT"
 
           if ! [[ "$NEW_API" =~ ^[0-9]{5,7}$ ]]; then
             echo "Could not extract a valid API version - aborting without changing anything."
+            echo "result=extraction_failed" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           if [ "$NEW_API" -le "$CURRENT_FIRST" ]; then
             echo "No newer API version than what's already declared - nothing to do."
+            echo "result=up_to_date" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -48,3 +52,33 @@ jobs:
           git add "$MANIFEST"
           git commit -m "chore: bump APIVersion to $NEW_API $NEW_SECOND (esoui/esoui reports API $NEW_API live)"
           git push
+          echo "new=$NEW_API $NEW_SECOND" >> "$GITHUB_OUTPUT"
+          echo "result=updated" >> "$GITHUB_OUTPUT"
+
+      - name: Annotate result
+        if: always()
+        run: |
+          STATUS="${{ steps.refresh.outcome }}"
+          RESULT="${{ steps.refresh.outputs.result }}"
+          CURRENT="${{ steps.refresh.outputs.current }}"
+          NEW="${{ steps.refresh.outputs.new }}"
+          AFTER="${NEW:-$CURRENT}"
+          if [ "$STATUS" != "success" ]; then
+            TITLE="API Version Refresh Failed"
+            echo "::error title=$TITLE::Check the 'Check esoui/esoui for the current live API version' step's log above."
+          elif [ "$RESULT" == "updated" ]; then
+            TITLE="API Version Refresh Complete"
+            echo "::notice title=$TITLE::APIVersion updated from $CURRENT to $NEW and pushed."
+          elif [ "$RESULT" == "up_to_date" ]; then
+            TITLE="API Version Already Up To Date"
+            echo "::notice title=$TITLE::Declared API $CURRENT already matches or exceeds what esoui/esoui reports live."
+          else
+            TITLE="API Version Refresh Skipped"
+            echo "::warning title=$TITLE::Could not extract a valid API version number from esoui/esoui's README - nothing changed."
+          fi
+          {
+            echo "## $TITLE"
+            echo ""
+            echo "- **Declared API (before):** $CURRENT"
+            echo "- **Declared API (after):** $AFTER"
+          } >> "$GITHUB_STEP_SUMMARY"
