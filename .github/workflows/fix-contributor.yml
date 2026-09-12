@@ -1,0 +1,73 @@
+name: Fix Contributor
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type REWRITE to confirm - this rewrites ALL commit history and force-pushes. Irreversible for anyone who has cloned this repo."
+        required: true
+        type: string
+      bot_login:
+        description: "The bot identity's commit author email to rewrite"
+        required: false
+        type: string
+        default: "41898282+github-actions[bot]@users.noreply.github.com"
+      new_name:
+        description: "Real git name to rewrite those commits to"
+        required: false
+        type: string
+        default: "MPHONlC"
+      new_email:
+        description: "Real git email to rewrite those commits to"
+        required: false
+        type: string
+        default: "207844175+MPHONlC@users.noreply.github.com"
+
+jobs:
+  rewrite:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "REWRITE" ]; then
+            echo "::error title=Aborted::Confirmation text didn't match as changed. Re-run and type REWRITE (all caps) to proceed."
+            exit 1
+          fi
+
+      - name: Checkout (full history)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install git-filter-repo
+        run: pip install --quiet git-filter-repo
+
+      - name: Rewrite matching commits to the real identity
+        run: |
+          git filter-repo --force --commit-callback "
+          if commit.author_email == b'${{ inputs.bot_login }}':
+              commit.author_name = b'${{ inputs.new_name }}'
+              commit.author_email = b'${{ inputs.new_email }}'
+          if commit.committer_email == b'${{ inputs.bot_login }}':
+              commit.committer_name = b'${{ inputs.new_name }}'
+              commit.committer_email = b'${{ inputs.new_email }}'
+          "
+
+      - name: Push rewritten history
+        run: |
+          git remote add origin "https://x-access-token:${{ secrets.GITHthub.repository }}.git"
+          git push --force-with-lease origin --all
+          git push --force-with-lease origin --tags
+
+      - name: Annotate result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "::notice title=History Rewrite Complete::Commits autho} were rewritten to ${{ inputs.new_name }} and force-pushed. GitHub's
+Contributors graph re-scans automatically - it may take a few minutes tolone of this repo needs to re-clone or hard-reset, since all commit SHAs
+from the affected commits onward have changed."
+          else
+            echo "::error title=History Rewrite Failed::Check the step lbranch protection on main blocking force-pushes - if so, temporarilydisable 'Restrict force pushes' under Settings > Branches, re-run this w
+          fi
