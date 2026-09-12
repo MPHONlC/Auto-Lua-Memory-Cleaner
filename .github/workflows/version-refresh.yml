@@ -1,0 +1,38 @@
+name: Version Refresh
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    uses: ./.github/workflows/lua-check.yml
+
+  refresh-version:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Refresh AddOnVersion date prefix only (never the version suffix)
+        run: |
+          MANIFEST="AutoLuaMemoryCleaner.addon"
+          TODAY=$(date +%y%m%d)
+          CURRENT=$(grep "^## AddOnVersion:" "$MANIFEST" | awk '{print $3}')
+          SUFFIX="${CURRENT: -3}"
+          NEW="${TODAY}${SUFFIX}"
+          echo "Current AddOnVersion: $CURRENT"
+          echo "New AddOnVersion:     $NEW"
+          if [ "$CURRENT" = "$NEW" ]; then
+            echo "Already up to date, nothing to commit."
+            exit 0
+          fi
+          sed -i "s/## AddOnVersion: $CURRENT/## AddOnVersion: $NEW/" "$MANIFEST"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$MANIFEST"
+          git commit -m "chore: refresh AddOnVersion date to $TODAY [skip ci]"
+          git push
