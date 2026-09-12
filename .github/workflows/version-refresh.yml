@@ -3,6 +3,7 @@ name: Version Refresh
 on:
   push:
     branches: [main]
+  workflow_call:
 
 jobs:
   check:
