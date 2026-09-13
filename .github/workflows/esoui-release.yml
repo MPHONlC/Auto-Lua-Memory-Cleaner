@@ -33,9 +33,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - uses: MPHONlC/eso-version-refresh@Version-0.0.1
+      - uses: MPHONlC/version-refresh@Version-0.0.2
         with:
           manifest_file: 'AutoLuaMemoryCleaner.addon'
+          field_name: 'AddOnVersion'
+          format: 'YYMMDDVVV'
           git_name: 'MPHONlC'
           git_email: '207844175+MPHONlC@users.noreply.github.com'
 
@@ -54,8 +56,81 @@ jobs:
           git_name: 'MPHONlC'
           git_email: '207844175+MPHONlC@users.noreply.github.com'
 
-  release:
+  quality-gate-changelog-date:
     needs: [check, refresh-version, refresh-api-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: MPHONlC/changelog-date-check@Version-0.0.1
+        with:
+          manifest_file: 'AutoLuaMemoryCleaner.addon'
+
+  quality-gate-readme-badge:
+    needs: [check, refresh-version, refresh-api-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: MPHONlC/eso-readme-badge-check@Version-0.0.1
+        with:
+          manifest_file: 'AutoLuaMemoryCleaner.addon'
+
+  quality-gate-dependency:
+    needs: [check, refresh-version, refresh-api-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: MPHONlC/eso-dependency-check@Version-0.0.1
+        with:
+          manifest_file: 'AutoLuaMemoryCleaner.addon'
+          dependency_name: 'LibAPH'
+          dependency_manifest_url: 'https://raw.githubusercontent.com/MPHONlC/LibAPH/main/LibAPH.addon'
+
+  quality-gate-localization:
+    needs: [check, refresh-version, refresh-api-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: MPHONlC/localization-check@Version-0.0.1
+
+  quality-gate-slash-commands:
+    needs: [check, refresh-version, refresh-api-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: MPHONlC/eso-slash-command-doc-check@Version-0.0.1
+        with:
+          doc_files: |
+            README_BBCODE.txt
+            README.md
+            README_COMMONMARK.txt
+
+  quality-gate-markdown:
+    needs: [check, refresh-version, refresh-api-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: MPHONlC/markdown-check@Version-0.0.1
+        with:
+          bbcode_readme: 'README_BBCODE.txt'
+          bbcode_changelog: 'CHANGELOG_BBCODE.txt'
+
+  release:
+    needs:
+      - check
+      - refresh-version
+      - refresh-api-version
+      - quality-gate-changelog-date
+      - quality-gate-readme-badge
+      - quality-gate-dependency
+      - quality-gate-localization
+      - quality-gate-slash-commands
+      - quality-gate-markdown
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -83,9 +158,9 @@ jobs:
 
       - name: Extract latest changelog entries
         run: |
-          awk '/^\[b\]\[COLOR="Orange"\]Version / { if (found) exit; found=1 } found' CHANGELOG_ESOUI.txt > latest_changes_esoui.txt
-          awk '/^### Version / { if (found) exit; found=1 } found' CHANGELOG_GITHUB.txt > latest_changes_github.md
-          awk '/^# VERSION / { if (found) exit; found=1 } found' CHANGELOG_BETHESDA.txt > latest_changes_bethesda.txt
+          awk '/^\[b\]\[COLOR="Orange"\]Version / { if (found) exit; found=1 } found' CHANGELOG_BBCODE.txt > latest_changes_esoui.txt
+          awk '/^### Version / { if (found) exit; found=1 } found' CHANGELOG_GFM.txt > latest_changes_github.md
+          awk '/^# VERSION / { if (found) exit; found=1 } found' CHANGELOG_COMMONMARK.txt > latest_changes_bethesda.txt
           awk '/^Version: / { if (found) exit; found=1 } found' CHANGELOG.md > latest_changes_plain.md
           echo "--- ESOUI (BBCode, latest entry) ---"
           cat latest_changes_esoui.txt
@@ -96,10 +171,19 @@ jobs:
           echo "--- Plain changelog (for step summaries) ---"
           cat latest_changes_plain.md
 
-      - name: Compare changelog and description content across platforms
+      - name: Compare changelog content across platforms
         if: always()
-        run: |
-          python3 .github/scripts/compare_changelogs.py >> "$GITHUB_STEP_SUMMARY" || true
+        continue-on-error: true
+        uses: MPHONlC/changelog-check@Version-0.0.1
+        with:
+          bbcode_file: 'CHANGELOG_BBCODE.txt'
+
+      - name: Compare description content across platforms
+        if: always()
+        continue-on-error: true
+        uses: MPHONlC/description-check@Version-0.0.1
+        with:
+          bbcode_file: 'README_BBCODE.txt'
 
       - name: Test upload to ESOUI (dry run)
         id: dry_test
@@ -110,8 +194,8 @@ jobs:
           addon_id: '4388'
           version: ${{ steps.version.outputs.version }}
           zip_file: ${{ env.zip_file }}
-          changelog_file: 'CHANGELOG_ESOUI.txt'
-          description_file: 'README_ESOUI.txt'
+          changelog_file: 'CHANGELOG_BBCODE.txt'
+          description_file: 'README_BBCODE.txt'
           test: true
 
       - name: Annotate ESOUI test result
@@ -232,8 +316,8 @@ jobs:
           addon_id: '4388'
           version: ${{ steps.version.outputs.version }}
           zip_file: ${{ env.zip_file }}
-          changelog_file: 'CHANGELOG_ESOUI.txt'
-          description_file: 'README_ESOUI.txt'
+          changelog_file: 'CHANGELOG_BBCODE.txt'
+          description_file: 'README_BBCODE.txt'
 
       - name: Annotate ESOUI upload result
         if: always() && inputs.upload_esoui == true

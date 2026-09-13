@@ -17,8 +17,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - uses: MPHONlC/eso-version-refresh@Version-0.0.1
+      - uses: MPHONlC/version-refresh@Version-0.0.2
         with:
           manifest_file: 'AutoLuaMemoryCleaner.addon'
+          field_name: 'AddOnVersion'
+          format: 'YYMMDDVVV'
           git_name: 'MPHONlC'
           git_email: '207844175+MPHONlC@users.noreply.github.com'

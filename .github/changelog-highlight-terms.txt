@@ -1,0 +1,14 @@
+Module Manager
+Auto Pool Cleanup After Travel
+Pool Cleanup report
+Setup Wizard
+Library Warning Messages
+Bug Report
+Live statistics
+console Settings Menu
+chat and screen announcement messages
+submenus remembering
+Codebase changes
+Chat output
+
+Client information:Lime

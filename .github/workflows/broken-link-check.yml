@@ -1,0 +1,28 @@
+name: Broken Link Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - 'README_BBCODE.txt'
+      - 'README_COMMONMARK.txt'
+      - 'CHANGELOG_GFM.txt'
+  schedule:
+    - cron: '0 12 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check for broken links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >
+            --no-progress
+            README.md README_BBCODE.txt README_COMMONMARK.txt CHANGELOG_GFM.txt
+          fail: true
