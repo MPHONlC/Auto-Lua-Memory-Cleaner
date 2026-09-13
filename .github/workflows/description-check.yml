@@ -20,3 +20,4 @@ jobs:
       - uses: MPHONlC/description-check@Version-0.0.1
         with:
           bbcode_file: 'README_BBCODE.txt'
+          manifest_file: 'AutoLuaMemoryCleaner.addon'

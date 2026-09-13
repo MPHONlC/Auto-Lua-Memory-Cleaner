@@ -33,7 +33,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - uses: MPHONlC/version-refresh@Version-0.0.2
+      - uses: MPHONlC/version-refresh@Version-0.0.3
         with:
           manifest_file: 'AutoLuaMemoryCleaner.addon'
           field_name: 'AddOnVersion'
@@ -50,7 +50,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - uses: MPHONlC/eso-api-version-refresh@Version-0.0.1
+      - uses: MPHONlC/eso-api-version-refresh@Version-0.0.2
         with:
           manifest_file: 'AutoLuaMemoryCleaner.addon'
           git_name: 'MPHONlC'
@@ -102,7 +102,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - uses: MPHONlC/eso-slash-command-doc-check@Version-0.0.1
+      - uses: MPHONlC/eso-slash-command-doc-check@Version-0.0.2
         with:
           doc_files: |
             README_BBCODE.txt
