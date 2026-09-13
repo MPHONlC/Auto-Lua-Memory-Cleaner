@@ -1,0 +1,27 @@
+name: Changelog Content Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'CHANGELOG_ESOUI.txt'
+      - 'CHANGELOG_GITHUB.txt'
+      - 'CHANGELOG_BETHESDA.txt'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Extract latest changelog entries
+        run: |
+          awk '/^\[b\]\[COLOR="Orange"\]Version / { if (found) exit; found=1 } found' CHANGELOG_ESOUI.txt > latest_changes_esoui.txt
+          awk '/^### Version / { if (found) exit; found=1 } found' CHANGELOG_GITHUB.txt > latest_changes_github.md
+          awk '/^# VERSION / { if (found) exit; found=1 } found' CHANGELOG_BETHESDA.txt > latest_changes_bethesda.txt
+
+      - name: Compare changelog content across ESOUI, GitHub, and Bethesda
+        run: |
+          python3 .github/scripts/compare_changelogs.py | tee -a "$GITHUB_STEP_SUMMARY"

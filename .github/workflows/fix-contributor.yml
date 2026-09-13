@@ -11,7 +11,7 @@ on:
         description: "The bot identity's commit author email to rewrite"
         required: false
         type: string
-        default: "github-actions[bot]@users.noreply.github.com"
+        default: "41898282+github-actions[bot]@users.noreply.github.com"
       new_name:
         description: "Real git name to rewrite those commits to"
         required: false

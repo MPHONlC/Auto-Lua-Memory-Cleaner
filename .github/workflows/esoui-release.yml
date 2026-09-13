@@ -1,10 +1,10 @@
-name: ESOUI Release
+name: Release / Update
 
 on:
   workflow_dispatch:
     inputs:
       test_run:
-        description: "Test Run (dry-run ESOUI upload - safe, validates without publishing anything)"
+        description: "Test Run (dry-run ESOUI + Bethesda uploads - safe, validates without publishing anything)"
         type: boolean
         default: true
       upload_esoui:
@@ -13,6 +13,10 @@ on:
         default: false
       release_github:
         description: "Release to Github"
+        type: boolean
+        default: false
+      upload_bethesda:
+        description: "Upload to Bethesda"
         type: boolean
         default: false
 
@@ -79,12 +83,23 @@ jobs:
 
       - name: Extract latest changelog entries
         run: |
+          awk '/^\[b\]\[COLOR="Orange"\]Version / { if (found) exit; found=1 } found' CHANGELOG_ESOUI.txt > latest_changes_esoui.txt
           awk '/^### Version / { if (found) exit; found=1 } found' CHANGELOG_GITHUB.txt > latest_changes_github.md
+          awk '/^# VERSION / { if (found) exit; found=1 } found' CHANGELOG_BETHESDA.txt > latest_changes_bethesda.txt
           awk '/^Version: / { if (found) exit; found=1 } found' CHANGELOG.md > latest_changes_plain.md
+          echo "--- ESOUI (BBCode, latest entry) ---"
+          cat latest_changes_esoui.txt
           echo "--- GitHub Release body (rendered markdown) ---"
           cat latest_changes_github.md
+          echo "--- Bethesda (release_notes_file) ---"
+          cat latest_changes_bethesda.txt
           echo "--- Plain changelog (for step summaries) ---"
           cat latest_changes_plain.md
+
+      - name: Compare changelog and description content across platforms
+        if: always()
+        run: |
+          python3 .github/scripts/compare_changelogs.py >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: Test upload to ESOUI (dry run)
         id: dry_test
@@ -99,7 +114,7 @@ jobs:
           description_file: 'README_ESOUI.txt'
           test: true
 
-      - name: Annotate test result
+      - name: Annotate ESOUI test result
         if: always() && inputs.test_run == true
         run: |
           STATUS="${{ steps.dry_test.outcome }}"
@@ -112,7 +127,7 @@ jobs:
           fi
           echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}.$DETAIL"
           {
-            echo "## $TITLE"
+            echo "## ESOUI: $TITLE"
             echo ""
             echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
             echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
@@ -124,6 +139,46 @@ jobs:
             echo "### Changelog"
             echo '```'
             cat latest_changes_plain.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test upload to Bethesda (dry run)
+        id: dry_test_bethesda
+        if: inputs.test_run == true
+        uses: m00nyONE/bnet-upload@v1
+        with:
+          BNET_USERNAME: ${{ secrets.BNET_USERNAME }}
+          BNET_PASSWORD: ${{ secrets.BNET_PASSWORD }}
+          addon_id: '9926b8d4-d4ca-4215-8790-013c0b1630c0'
+          version: ${{ steps.version.outputs.display_version }}
+          zip_file: ${{ env.zip_file }}
+          release_notes_file: 'latest_changes_bethesda.txt'
+          publish: false
+
+      - name: Annotate Bethesda test result
+        if: always() && inputs.test_run == true
+        run: |
+          STATUS="${{ steps.dry_test_bethesda.outcome }}"
+          if [ "$STATUS" == "success" ]; then
+            TITLE="Test Release Complete"
+            DETAIL=" Note: unlike the ESOUI test above, Bethesda's uploader has no true no-op test mode - this uploaded a real unpublished draft to your Bethesda.net account (publish: false), it just isn't visible to players until you check 'Upload to Bethesda' for real."
+          else
+            TITLE="Test Release Failed"
+            DETAIL=" Check the 'Test upload to Bethesda' step's log above. Common causes: MFA still enabled on your Bethesda.net account (must be off for the CLI uploader), wrong BNET_USERNAME/BNET_PASSWORD secret, or a wrong addon_id."
+          fi
+          echo "::notice title=Bethesda $TITLE::Version ${{ steps.version.outputs.display_version }}.$DETAIL"
+          {
+            echo "## Bethesda: $TITLE"
+            echo ""
+            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
+            if [ -n "$DETAIL" ]; then
+              echo ""
+              echo "${DETAIL# }"
+            fi
+            echo ""
+            echo "### Changelog"
+            echo '```'
+            cat latest_changes_bethesda.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -153,7 +208,7 @@ jobs:
           fi
           echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}.$DETAIL"
           {
-            echo "## $TITLE"
+            echo "## GitHub: $TITLE"
             echo ""
             echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
             echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
@@ -193,7 +248,7 @@ jobs:
           fi
           echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}.$DETAIL"
           {
-            echo "## $TITLE"
+            echo "## ESOUI: $TITLE"
             echo ""
             echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
             echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
@@ -205,5 +260,45 @@ jobs:
             echo "### Changelog"
             echo '```'
             cat latest_changes_plain.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload to Bethesda (real, only if upload_bethesda was checked)
+        id: real_upload_bethesda
+        if: inputs.upload_bethesda == true
+        uses: m00nyONE/bnet-upload@v1
+        with:
+          BNET_USERNAME: ${{ secrets.BNET_USERNAME }}
+          BNET_PASSWORD: ${{ secrets.BNET_PASSWORD }}
+          addon_id: '9926b8d4-d4ca-4215-8790-013c0b1630c0'
+          version: ${{ steps.version.outputs.display_version }}
+          zip_file: ${{ env.zip_file }}
+          release_notes_file: 'latest_changes_bethesda.txt'
+          publish: true
+
+      - name: Annotate Bethesda upload result
+        if: always() && inputs.upload_bethesda == true
+        run: |
+          STATUS="${{ steps.real_upload_bethesda.outcome }}"
+          if [ "$STATUS" == "success" ]; then
+            TITLE="Bethesda Upload Complete"
+            DETAIL=""
+          else
+            TITLE="Bethesda Upload Failed"
+            DETAIL=" Check the 'Upload to Bethesda (real)' step's log above. Common causes: MFA still enabled on your Bethesda.net account (must be off for the CLI uploader), wrong BNET_USERNAME/BNET_PASSWORD secret, or a wrong addon_id."
+          fi
+          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }}.$DETAIL"
+          {
+            echo "## Bethesda: $TITLE"
+            echo ""
+            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
+            if [ -n "$DETAIL" ]; then
+              echo ""
+              echo "${DETAIL# }"
+            fi
+            echo ""
+            echo "### Changelog"
+            echo '```'
+            cat latest_changes_bethesda.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
