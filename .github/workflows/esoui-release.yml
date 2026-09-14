@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       test_run:
-        description: "Test Run (dry-run ESOUI + Bethesda uploads - safe, validates without publishing anything)"
+        description: "Test Run (dry-run ESOUI + GitHub draft + Bethesda uploads - safe, validates without publishing anything)"
         type: boolean
         default: true
       upload_esoui:
@@ -157,87 +157,6 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Test upload to Bethesda (dry run)
-        id: dry_test_bethesda
-        if: inputs.test_run == true
-        uses: m00nyONE/bnet-upload@v1
-        with:
-          BNET_USERNAME: ${{ secrets.BNET_USERNAME }}
-          BNET_PASSWORD: ${{ secrets.BNET_PASSWORD }}
-          addon_id: '9926b8d4-d4ca-4215-8790-013c0b1630c0'
-          version: ${{ steps.version.outputs.display_version }}
-          zip_file: ${{ env.zip_file }}
-          release_notes_file: 'latest_changes_bethesda.txt'
-          publish: false
-
-      - name: Annotate Bethesda test result
-        if: always() && inputs.test_run == true
-        run: |
-          STATUS="${{ steps.dry_test_bethesda.outcome }}"
-          if [ "$STATUS" == "success" ]; then
-            TITLE="Test Release Complete"
-            DETAIL=" Note: unlike the ESOUI test above, Bethesda's uploader has no true no-op test mode - this uploaded a real unpublished draft to your Bethesda.net account (publish: false), it just isn't visible to players until you check 'Upload to Bethesda' for real."
-          else
-            TITLE="Test Release Failed"
-            DETAIL=" Check the 'Test upload to Bethesda' step's log above. Common causes: MFA still enabled on your Bethesda.net account (must be off for the CLI uploader), wrong BNET_USERNAME/BNET_PASSWORD secret, or a wrong addon_id."
-          fi
-          echo "::notice title=Bethesda $TITLE::Version ${{ steps.version.outputs.display_version }}.$DETAIL"
-          {
-            echo "## Bethesda: $TITLE"
-            echo ""
-            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
-            if [ -n "$DETAIL" ]; then
-              echo ""
-              echo "${DETAIL# }"
-            fi
-            echo ""
-            echo "### Changelog"
-            echo '```'
-            cat latest_changes_bethesda.txt
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Create GitHub Release (only if release_github was checked)
-        id: gh_release
-        if: inputs.release_github == true
-        uses: ncipollo/release-action@v1
-        with:
-          name: Version-${{ steps.version.outputs.display_version }}
-          tag: Version-${{ steps.version.outputs.display_version }}
-          artifacts: ${{ env.zip_file }}
-          artifactContentType: application/zip
-          bodyFile: latest_changes_github.md
-          allowUpdates: true
-          makeLatest: true
-
-      - name: Annotate GitHub Release result
-        if: always() && inputs.release_github == true
-        run: |
-          STATUS="${{ steps.gh_release.outcome }}"
-          if [ "$STATUS" == "success" ]; then
-            TITLE="GitHub Release Complete"
-            DETAIL=""
-          else
-            TITLE="GitHub Release Failed"
-            DETAIL=" GitHub Release creation failed - check the 'Create GitHub Release' step's log above (common causes: tag already exists on a different commit, bad artifact path, missing contents:write permission)."
-          fi
-          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}.$DETAIL"
-          {
-            echo "## GitHub: $TITLE"
-            echo ""
-            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
-            echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
-            if [ -n "$DETAIL" ]; then
-              echo ""
-              echo "${DETAIL# }"
-            fi
-            echo ""
-            echo "### Changelog"
-            echo '```'
-            cat latest_changes_plain.md
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload to ESOUI (real, only if upload_esoui was checked)
         id: real_upload
         if: inputs.upload_esoui == true
@@ -275,6 +194,130 @@ jobs:
             echo "### Changelog"
             echo '```'
             cat latest_changes_plain.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub Release (dry run - draft)
+        id: gh_release_test
+        if: inputs.test_run == true
+        uses: ncipollo/release-action@v1
+        with:
+          name: Version-${{ steps.version.outputs.display_version }}
+          tag: Version-${{ steps.version.outputs.display_version }}
+          artifacts: ${{ env.zip_file }}
+          artifactContentType: application/zip
+          bodyFile: latest_changes_github.md
+          allowUpdates: true
+          draft: true
+          makeLatest: false
+
+      - name: Annotate GitHub Release test result
+        if: always() && inputs.test_run == true
+        run: |
+          STATUS="${{ steps.gh_release_test.outcome }}"
+          if [ "$STATUS" == "success" ]; then
+            TITLE="Test Release Complete"
+            DETAIL=" Note: this created/updated a real DRAFT release on GitHub (draft: true) - visible only to repo collaborators, not public, and not marked 'Latest'. It gets published for real once 'release_github' is checked on a non-test run."
+          else
+            TITLE="Test Release Failed"
+            DETAIL=" Check the 'Create GitHub Release (dry run - draft)' step's log above (common causes: tag already exists on a different commit, bad artifact path, missing contents:write permission)."
+          fi
+          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}.$DETAIL"
+          {
+            echo "## GitHub: $TITLE"
+            echo ""
+            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
+            echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
+            if [ -n "$DETAIL" ]; then
+              echo ""
+              echo "${DETAIL# }"
+            fi
+            echo ""
+            echo "### Changelog"
+            echo '```'
+            cat latest_changes_plain.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub Release (only if release_github was checked)
+        id: gh_release
+        if: inputs.release_github == true
+        uses: ncipollo/release-action@v1
+        with:
+          name: Version-${{ steps.version.outputs.display_version }}
+          tag: Version-${{ steps.version.outputs.display_version }}
+          artifacts: ${{ env.zip_file }}
+          artifactContentType: application/zip
+          bodyFile: latest_changes_github.md
+          allowUpdates: true
+          draft: false
+          makeLatest: true
+
+      - name: Annotate GitHub Release result
+        if: always() && inputs.release_github == true
+        run: |
+          STATUS="${{ steps.gh_release.outcome }}"
+          if [ "$STATUS" == "success" ]; then
+            TITLE="GitHub Release Complete"
+            DETAIL=""
+          else
+            TITLE="GitHub Release Failed"
+            DETAIL=" GitHub Release creation failed - check the 'Create GitHub Release' step's log above (common causes: tag already exists on a different commit, bad artifact path, missing contents:write permission)."
+          fi
+          echo "::notice title=$TITLE::Version ${{ steps.version.outputs.display_version }} (AddOnVersion ${{ steps.version.outputs.version }}), declared API ${{ steps.version.outputs.api_version }}.$DETAIL"
+          {
+            echo "## GitHub: $TITLE"
+            echo ""
+            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
+            echo "- **Declared API:** ${{ steps.version.outputs.api_version }}"
+            if [ -n "$DETAIL" ]; then
+              echo ""
+              echo "${DETAIL# }"
+            fi
+            echo ""
+            echo "### Changelog"
+            echo '```'
+            cat latest_changes_plain.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test upload to Bethesda (dry run)
+        id: dry_test_bethesda
+        if: inputs.test_run == true
+        uses: m00nyONE/bnet-upload@v1
+        with:
+          BNET_USERNAME: ${{ secrets.BNET_USERNAME }}
+          BNET_PASSWORD: ${{ secrets.BNET_PASSWORD }}
+          addon_id: '9926b8d4-d4ca-4215-8790-013c0b1630c0'
+          version: ${{ steps.version.outputs.display_version }}
+          zip_file: ${{ env.zip_file }}
+          release_notes_file: 'latest_changes_bethesda.txt'
+          publish: false
+
+      - name: Annotate Bethesda test result
+        if: always() && inputs.test_run == true
+        run: |
+          STATUS="${{ steps.dry_test_bethesda.outcome }}"
+          if [ "$STATUS" == "success" ]; then
+            TITLE="Test Release Complete"
+            DETAIL=" Note: unlike the ESOUI test above, Bethesda's uploader has no true no-op test mode - this uploaded a real unpublished draft to your Bethesda.net account (publish: false), it just isn't visible to players until you check 'Upload to Bethesda' for real."
+          else
+            TITLE="Test Release Failed"
+            DETAIL=" Check the 'Test upload to Bethesda' step's log above. Common causes: MFA still enabled on your Bethesda.net account (must be off for the CLI uploader), wrong BNET_USERNAME/BNET_PASSWORD secret, or a wrong addon_id."
+          fi
+          echo "::notice title=Bethesda $TITLE::Version ${{ steps.version.outputs.display_version }}.$DETAIL"
+          {
+            echo "## Bethesda: $TITLE"
+            echo ""
+            echo "- **Version:** ${{ steps.version.outputs.display_version }} (AddOnVersion \`${{ steps.version.outputs.version }}\`)"
+            if [ -n "$DETAIL" ]; then
+              echo ""
+              echo "${DETAIL# }"
+            fi
+            echo ""
+            echo "### Changelog"
+            echo '```'
+            cat latest_changes_bethesda.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
