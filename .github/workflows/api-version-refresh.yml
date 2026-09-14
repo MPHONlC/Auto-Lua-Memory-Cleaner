@@ -2,7 +2,7 @@ name: API Version Refresh
 
 on:
   schedule:
-    - cron: '0 12 * * *'   # once a day, 12:00 UTC
+    - cron: '0 12 * * *'
   workflow_dispatch:
   workflow_call:
 
