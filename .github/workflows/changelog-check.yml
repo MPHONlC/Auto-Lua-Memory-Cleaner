@@ -9,6 +9,7 @@ on:
       - 'CHANGELOG_GFM.txt'
       - 'CHANGELOG_COMMONMARK.txt'
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   check:

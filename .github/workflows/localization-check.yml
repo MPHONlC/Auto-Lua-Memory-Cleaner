@@ -6,6 +6,7 @@ on:
     paths:
       - 'lang/*.lua'
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   check:

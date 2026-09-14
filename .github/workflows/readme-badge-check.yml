@@ -12,6 +12,7 @@ on:
         description: 'Auto-fix stale badge values instead of just failing'
         type: boolean
         default: false
+  workflow_call:
 
 jobs:
   check:

@@ -20,6 +20,7 @@ on:
         description: "Regenerate even if validation found no syntax errors (useful for a version you haven't hand-authored yet)"
         type: boolean
         default: false
+  workflow_call:
 
 jobs:
   validate:
