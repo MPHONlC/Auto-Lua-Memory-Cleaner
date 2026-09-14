@@ -20,6 +20,6 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Check for broken links
-        uses: ./.github/actions/broken-link-check
+        uses: MPHONlC/broken-link-check@Version-0.0.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
