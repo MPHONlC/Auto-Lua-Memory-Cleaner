@@ -1,9 +1,10 @@
-name: Changelog Content Check
+name: Changelog Check
 
 on:
   push:
     branches: [main]
     paths:
+      - 'CHANGELOG.md'
       - 'CHANGELOG_BBCODE.txt'
       - 'CHANGELOG_GFM.txt'
       - 'CHANGELOG_COMMONMARK.txt'
@@ -16,6 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - uses: MPHONlC/changelog-check@Version-0.0.1
+      - uses: MPHONlC/changelog-check@Version-0.0.2
         with:
           bbcode_file: 'CHANGELOG_BBCODE.txt'
+          manifest_file: 'AutoLuaMemoryCleaner.addon'

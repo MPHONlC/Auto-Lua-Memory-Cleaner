@@ -20,9 +20,6 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Check for broken links
-        uses: lycheeverse/lychee-action@v2
+        uses: MPHONlC/broken-link-check@Version-0.0.2
         with:
-          args: >
-            --no-progress
-            README.md README_BBCODE.txt README_COMMONMARK.txt CHANGELOG_GFM.txt
-          fail: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}

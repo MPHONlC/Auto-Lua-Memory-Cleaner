@@ -62,8 +62,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - uses: MPHONlC/changelog-date-check@Version-0.0.1
+      - uses: MPHONlC/changelog-check@Version-0.0.2
         with:
+          bbcode_file: 'CHANGELOG_BBCODE.txt'
           manifest_file: 'AutoLuaMemoryCleaner.addon'
 
   quality-gate-readme-badge:
@@ -82,7 +83,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - uses: MPHONlC/eso-dependency-check@Version-0.0.1
+      - uses: MPHONlC/eso-dependency-check@Version-0.0.2
         with:
           manifest_file: 'AutoLuaMemoryCleaner.addon'
           dependency_name: 'LibAPH'
@@ -174,14 +175,15 @@ jobs:
       - name: Compare changelog content across platforms
         if: always()
         continue-on-error: true
-        uses: MPHONlC/changelog-check@Version-0.0.1
+        uses: MPHONlC/changelog-check@Version-0.0.2
         with:
           bbcode_file: 'CHANGELOG_BBCODE.txt'
+          manifest_file: 'AutoLuaMemoryCleaner.addon'
 
       - name: Compare description content across platforms
         if: always()
         continue-on-error: true
-        uses: MPHONlC/description-check@Version-0.0.1
+        uses: MPHONlC/description-check@Version-0.0.2
         with:
           bbcode_file: 'README_BBCODE.txt'
 

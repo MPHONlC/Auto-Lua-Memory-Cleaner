@@ -8,13 +8,18 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - uses: MPHONlC/eso-dependency-check@Version-0.0.1
+      - uses: MPHONlC/eso-dependency-check@Version-0.0.2
         with:
           manifest_file: 'AutoLuaMemoryCleaner.addon'
           dependency_name: 'LibAPH'
           # TODO: confirm this is LibAPH's real repo/branch once it's pushed to GitHub
           dependency_manifest_url: 'https://raw.githubusercontent.com/MPHONlC/LibAPH/main/LibAPH.addon'
+          auto_update: true
+          git_name: 'MPHONlC'
+          git_email: '207844175+MPHONlC@users.noreply.github.com'
