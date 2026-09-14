@@ -54,9 +54,9 @@ runs:
           --no-progress
           --verbose
           --exclude '${{ inputs.exclude }}'
-          --format json
-          --output ./lychee-report.json
           ${{ inputs.files }}
+        format: json
+        output: ./lychee-report.json
         token: ${{ inputs.github_token }}
         jobSummary: false
         fail: false
