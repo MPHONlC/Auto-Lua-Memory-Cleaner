@@ -20,7 +20,7 @@
 * Fixed <kbd>Chat output</kbd> on console for slash commands.
 * Added a <kbd>Library Warning Messages toggle</kbd> to enable or disable the optional-library popup, screen announcement, and chat reminder on their own <kbd>(/alclibwarn)</kbd>.
 * Updated the optional-library chat and screen announcement messages to clearly state whether <kbd>LibAddonMenu</kbd> or <kbd>LibHarvensAddonSettings</kbd> is missing, disabled, or outdated, with the popup and screen announcement now shown only once instead of on every reload.
-* Added settings-menu submenus remembering whether they were left open or closed across a reload.
+* Updated settings-menu submenus remembering whether they were left open or closed across a reload.
 
 #### General Additions
 * Updated <kbd>Bug Report</kbd>.

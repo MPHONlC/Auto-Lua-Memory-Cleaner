@@ -44,7 +44,7 @@
 
 [SIZE="2"][b][COLOR="RoyalBlue"]UI & Scene Manager:[/COLOR][/b][/SIZE]
 [LIST]
-[*] [COLOR="Lime"]Added[/COLOR] [COLOR="Lime"]Gamepad UI Movement[/COLOR] via [COLOR="#FF69B4"]LibCombatAlerts[/COLOR] to allow [COLOR="#FF69B4"]PS5/Xbox[/COLOR] users to move all ALC windows with D-Pad.
+[*] [COLOR="Lime"]Added[/COLOR] [COLOR="Lime"]Gamepad UI Movement[/COLOR] via [COLOR="#FF69B4"]LibCombatAlerts[/COLOR] to allow [COLOR="#FF69B4"]PS5/Xbox[/COLOR] users to move all ALC windows with the Right Stick.
 [*] [COLOR="#FF6347"]Fixed[/COLOR] the [COLOR="#FF6347"]Scene Manager Override Bug[/COLOR] that forcefully unhid the [COLOR="#00FFFF"]ALC[/COLOR] UI by implementing strict fragment queries.
 [/LIST]
 
