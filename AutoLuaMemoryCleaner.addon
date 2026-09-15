@@ -4,7 +4,7 @@
 ## Author: |ca500f3A|r|cb400e6P|r|cc300daH|r|cd200cdO|r|ce100c1NlC|r
 ## APIVersion: 101050 101051
 ## SavedVariables: AutoLuaCleaner
-## DependsOn: LibAPH>=260914001
+## DependsOn: LibAPH>=260915001
 ## OptionalDependsOn: LibAddonMenu-2.0 LibHarvensAddonSettings
 ## Description: |cfa9c1bLightweight|r |cCCFF00Auto Lua Memory Cleaner|r. Type /alc for a full list of commands.
 
