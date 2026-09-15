@@ -287,6 +287,16 @@ function ALC.dev_simulate_error()
 	end, 1)
 end
 
+function ALC.dismiss_captured_error()
+	ALC.last_own_error = nil
+	ALC.show_bug_report_box()
+end
+
+function ALC.wipe_all_bugs()
+	ALC.last_own_error = nil
+	if ALC.copy_box then ALC.copy_box:Hide() end
+end
+
 function ALC.show_copy_text_box(plain_text)
 	local is_dev = (GetDisplayName() == "@APHONlC")
 	ALC.copy_box = ALC.copy_box or LibAPH.CreateCopyTextBox({
@@ -294,6 +304,8 @@ function ALC.show_copy_text_box(plain_text)
 		closeText = ALC.L("BTN_CLOSE"),
 		titleText = ALC.L("BUG_REPORT_COPY_TITLE"),
 		devButton = is_dev and { text = "Simulate Error", onClick = ALC.dev_simulate_error } or nil,
+		dismissBug = { text = "Dismiss Bug", onClick = ALC.dismiss_captured_error },
+		wipeAllBugs = { text = "Wipe All Bugs", onClick = ALC.wipe_all_bugs },
 	})
 	ALC.copy_box:Show(plain_text)
 end
