@@ -281,11 +281,19 @@ function ALC.build_client_info_text()
 	return table.concat(info_lines, "\n")
 end
 
+function ALC.dev_simulate_error()
+	zo_callLater(function()
+		error(ALC.name .. ": dev-simulated error for bug report testing")
+	end, 1)
+end
+
 function ALC.show_copy_text_box(plain_text)
+	local is_dev = (GetDisplayName() == "@APHONlC")
 	ALC.copy_box = ALC.copy_box or LibAPH.CreateCopyTextBox({
 		name = "ALCCopyBox",
 		closeText = ALC.L("BTN_CLOSE"),
 		titleText = ALC.L("BUG_REPORT_COPY_TITLE"),
+		devButton = is_dev and { text = "Simulate Error", onClick = ALC.dev_simulate_error } or nil,
 	})
 	ALC.copy_box:Show(plain_text)
 end
