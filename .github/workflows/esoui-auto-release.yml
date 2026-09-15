@@ -1,22 +1,16 @@
-name: Release / Update
+name: Automated Release / Update
 
 on:
+  schedule:
+    - cron: '0 13 * * *'
   workflow_dispatch:
     inputs:
       test_run:
-        description: "Test Run (dry-run ESOUI + GitHub draft + Bethesda uploads - safe, validates without publishing anything)"
+        description: "Test Run (dry-run ESOUI + GitHub draft + Bethesda uploads - always safe, never publishes for real, use this to verify the automated pipeline)"
         type: boolean
         default: true
-      upload_esoui:
-        description: "Upload to ESOUI"
-        type: boolean
-        default: false
-      release_github:
-        description: "Release to Github"
-        type: boolean
-        default: false
-      upload_bethesda:
-        description: "Upload to Bethesda"
+      force:
+        description: "Force a real release even if the ESO API version did not change (ignored by the daily schedule, manual override only)"
         type: boolean
         default: false
 
@@ -74,8 +68,26 @@ jobs:
     needs: markdown-check
     uses: ./.github/workflows/changelog-check.yml
 
+  no-release-needed:
+    needs: [api-version-refresh, changelog-check]
+    if: needs.api-version-refresh.outputs.result != 'updated' && inputs.force != true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report no release needed
+        run: |
+          echo "::notice title=No Release Needed::ESO API version has not changed (result: ${{ needs.api-version-refresh.outputs.result }}). AddOnVersion's date portion may have been refreshed internally by version-refresh, but no release was published to any platform."
+          {
+            echo "## No Release Needed"
+            echo ""
+            echo "- **API version check result:** \`${{ needs.api-version-refresh.outputs.result }}\`"
+            echo "- **Declared API (manifest):** ${{ needs.api-version-refresh.outputs.old_api }}"
+            echo ""
+            echo "The ESO API version has not changed since the last check, so no release was published to ESOUI, GitHub, or Bethesda. AddOnVersion's date portion may still have been refreshed internally. Use \`force: true\` on a manual run to override this and release anyway."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release:
-    needs: changelog-check
+    needs: [api-version-refresh, changelog-check]
+    if: needs.api-version-refresh.outputs.result == 'updated' || inputs.force == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -157,9 +169,9 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload to ESOUI (real, only if upload_esoui was checked)
+      - name: Upload to ESOUI (real run only)
         id: real_upload
-        if: inputs.upload_esoui == true
+        if: inputs.test_run != true
         uses: m00nyONE/esoui-upload@main
         with:
           api_key: ${{ secrets.ESOUI_API_KEY }}
@@ -170,7 +182,7 @@ jobs:
           description_file: 'README_BBCODE.txt'
 
       - name: Annotate ESOUI upload result
-        if: always() && inputs.upload_esoui == true
+        if: always() && inputs.test_run != true
         run: |
           STATUS="${{ steps.real_upload.outcome }}"
           if [ "$STATUS" == "success" ]; then
@@ -239,9 +251,9 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Create GitHub Release (only if release_github was checked)
+      - name: Create GitHub Release (real run only)
         id: gh_release
-        if: inputs.release_github == true
+        if: inputs.test_run != true
         uses: ncipollo/release-action@v1
         with:
           name: Version-${{ steps.version.outputs.display_version }}
@@ -254,7 +266,7 @@ jobs:
           makeLatest: true
 
       - name: Annotate GitHub Release result
-        if: always() && inputs.release_github == true
+        if: always() && inputs.test_run != true
         run: |
           STATUS="${{ steps.gh_release.outcome }}"
           if [ "$STATUS" == "success" ]; then
@@ -321,9 +333,9 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload to Bethesda (real, only if upload_bethesda was checked)
+      - name: Upload to Bethesda (real run only)
         id: real_upload_bethesda
-        if: inputs.upload_bethesda == true
+        if: inputs.test_run != true
         uses: m00nyONE/bnet-upload@v1
         with:
           BNET_USERNAME: ${{ secrets.BNET_USERNAME }}
@@ -335,7 +347,7 @@ jobs:
           publish: true
 
       - name: Annotate Bethesda upload result
-        if: always() && inputs.upload_bethesda == true
+        if: always() && inputs.test_run != true
         run: |
           STATUS="${{ steps.real_upload_bethesda.outcome }}"
           if [ "$STATUS" == "success" ]; then
