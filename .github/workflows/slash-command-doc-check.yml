@@ -19,3 +19,4 @@ jobs:
             README_BBCODE.txt
             README.md
             README_COMMONMARK.txt
+          ignore_commands: '/alcsimulateerror'

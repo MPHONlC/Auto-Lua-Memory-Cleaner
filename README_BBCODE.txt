@@ -46,6 +46,8 @@ Auto Lua Memory Cleaner is event-driven first: exiting combat, entering a menu, 
 [*] [b][color=#00FFFF]/alcon[/color][/b] - Toggle Auto Lua Cleanup
 [*] [b][color=#00FFFF]/alcclean[/color][/b] - Force manual Lua cleanup
 [*] [b][color=#00FFFF]/alcpoolreload[/color][/b] - Toggle Auto Pool Cleanup After Travel
+[*] [b][color=#00FFFF]/alcpoolconfirm[/color][/b] - Toggle Auto Pool Cleanup After Travel Confirmation
+[*] [b][color=#00FFFF]/alcsinglepass[/color][/b] - Toggle Single Pass Cleanup
 [*] [b][color=#00FFFF]/alcui[/color][/b] - Toggle UI
 [*] [b][color=#00FFFF]/alclock[/color][/b] - Lock/Unlock UI
 [*] [b][color=#00FFFF]/alcreset[/color][/b] - Reset UI Position
@@ -53,6 +55,7 @@ Auto Lua Memory Cleaner is event-driven first: exiting combat, entering a menu, 
 [*] [b][color=#00FFFF]/alclogs[/color][/b] - Toggle Chat Logs
 [*] [b][color=#00FFFF]/alcwizard[/color][/b] - Re-run Setup Wizard
 [*] [b][color=#00FFFF]/alclibwarn[/color][/b] - Toggle Library Warning Messages
+[*] [b][color=#00FFFF]/alcbugreport[/color][/b] - Open the bug report copy box
 [*] [b][color=#00FFFF]/alcdelvars[/color][/b] - Reset ALL settings to defaults
 [*] [b][color=#00FFFF]/alcunloadwizard[/color][/b] - Toggle unload Wizard module
 [*] [b][color=#00FFFF]/alcunloadmenu[/color][/b] - Toggle unload Menu module

@@ -49,6 +49,8 @@ Auto Lua Memory Cleaner is event-driven first: real triggers (exiting combat, en
 | <kbd>/alcon</kbd> | Toggle Auto Lua Cleanup |
 | <kbd>/alcclean</kbd> | Force a manual Lua cleanup |
 | <kbd>/alcpoolreload</kbd> | Toggle Auto Pool Cleanup After Travel <sub>*(Console)*</sub> |
+| <kbd>/alcpoolconfirm</kbd> | Toggle Auto Pool Cleanup After Travel Confirmation <sub>*(Console)*</sub> |
+| <kbd>/alcsinglepass</kbd> | Toggle Single Pass Cleanup |
 | <kbd>/alcui</kbd> | Toggle the status UI |
 | <kbd>/alclock</kbd> | Lock/unlock the UI |
 | <kbd>/alcreset</kbd> | Reset UI position |
@@ -56,6 +58,7 @@ Auto Lua Memory Cleaner is event-driven first: real triggers (exiting combat, en
 | <kbd>/alclogs</kbd> | Toggle chat logs |
 | <kbd>/alcwizard</kbd> | Re-run the Setup Wizard |
 | <kbd>/alclibwarn</kbd> | Toggle Library Warning Messages |
+| <kbd>/alcbugreport</kbd> | Open the bug report copy box |
 | <kbd>/alcdelvars</kbd> | Reset all settings to defaults |
 | <kbd>/alcunloadwizard</kbd> | Toggle unload the Wizard module |
 | <kbd>/alcunloadmenu</kbd> | Toggle unload the Menu module |
