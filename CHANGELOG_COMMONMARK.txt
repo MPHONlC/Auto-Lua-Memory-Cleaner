@@ -21,12 +21,12 @@
 - Added a Library Warning Messages toggle to enable or disable the optional-library popup, screen announcement, and chat reminder on their own (/alclibwarn).
 - Updated the optional-library chat and screen announcement messages to clearly state whether LibAddonMenu or LibHarvensAddonSettings is missing, disabled, or outdated, with the popup and screen announcement now shown only once instead of on every reload.
 - Added settings-menu submenus remembering whether they were left open or closed across a reload.
-- The memory status display can now be resized by dragging its corner, with its text scaling to fit - Reset UI Size resets it back to default.
+- Added the ability to resize the memory status display by dragging its corner, with its text scaling to fit - Reset UI Size resets it back to default.
 
 ## General Additions
 
 - Updated Bug Report.
 - Removed Live statistics in favor of Client information for easier bug tracking and stability.
-- The Bug Report window now opens on its own when a new error is captured, and repeated occurrences of the same error are counted instead of piling up separately.
-- The Bug Report window can also be resized, with its text scaling to fit.
+- Updated Bug Report to open on its own when a new error is captured, and to count repeated occurrences of the same error instead of piling them up separately.
+- Added the ability to resize the Bug Report window, with its text scaling to fit.
 - Fixed the mouse cursor staying locked to camera control when the Bug Report window auto-opens.
