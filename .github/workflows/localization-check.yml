@@ -1,0 +1,21 @@
+name: Localization Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lang/*.lua'
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - uses: ./.github/actions/localization-check
+        with:
+          lang_glob: 'lang/*.lua'
+          reference: 'en.lua'

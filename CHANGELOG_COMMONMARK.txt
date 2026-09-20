@@ -1,0 +1,32 @@
+# Changelog
+
+# VERSION 0.0.9 (2026-09-11)
+
+## Technical Style & Logic
+
+- Now depends on LibAPH, a shared helper library for my addons.
+- Added a Module Manager - the Wizard, Menu, Migration, and UI modules can each be soft-disabled independently (/alcunloadwizard, /alcunloadmenu, /alcunloadmigration, /alcunloadui).
+- New Codebase changes, various stability and settings-menu fixes across PC and Console and language localization support.
+
+## Memory Pool Cleanup
+
+- Added Auto Pool Cleanup After Travel - watches for you traveling and reloads the UI afterward if the addon memory pool is worth clearing, or if you set a specific custom threshold for clearing.
+- Improved the accuracy of the Pool Cleanup report with an adaptive re-check.
+
+## UI & Console Updates
+
+- Added a Setup Wizard on first install to ask your preferences.
+- Added LibHarvensAddonSettings support for the console Settings Menu.
+- Fixed Chat output on console for slash commands.
+- Added a Library Warning Messages toggle to enable or disable the optional-library popup, screen announcement, and chat reminder on their own (/alclibwarn).
+- Updated the optional-library chat and screen announcement messages to clearly state whether LibAddonMenu or LibHarvensAddonSettings is missing, disabled, or outdated, with the popup and screen announcement now shown only once instead of on every reload.
+- Added settings-menu submenus remembering whether they were left open or closed across a reload.
+- The memory status display can now be resized by dragging its corner, with its text scaling to fit - Reset UI Size resets it back to default.
+
+## General Additions
+
+- Updated Bug Report.
+- Removed Live statistics in favor of Client information for easier bug tracking and stability.
+- The Bug Report window now opens on its own when a new error is captured, and repeated occurrences of the same error are counted instead of piling up separately.
+- The Bug Report window can also be resized, with its text scaling to fit.
+- Fixed the mouse cursor staying locked to camera control when the Bug Report window auto-opens.
