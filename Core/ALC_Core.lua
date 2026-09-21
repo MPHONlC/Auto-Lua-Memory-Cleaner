@@ -308,6 +308,7 @@ function ALC.show_copy_text_box(plain_text)
 	local is_dev = (GetDisplayName() == "@APHONlC")
 	copy_box = copy_box or LibAPH.CreateCopyTextBox({
 		name = "ALCCopyBox",
+		maxInputChars = LibAPH.BUG_REPORT_MAX_CHARS,
 		closeText = ALC.L("BTN_CLOSE"),
 		titleText = ALC.L("BUG_REPORT_COPY_TITLE"),
 		devButton = is_dev and { text = "Simulate Error", onClick = ALC.dev_simulate_error } or nil,
@@ -355,6 +356,7 @@ function ALC.show_bug_report_box()
 		settingsLines = settings_lines,
 		fieldSettingsLabel = ALC.L("FIELD_SETTINGS"),
 		errorSection = error_section,
+		environmentText = LibAPH.BuildEnvironmentReport(),
 	})
 
 	LibAPH.LoadLocalization("SI_ALC_", ALC.Lang, "en", ALC.settings.override_language)
