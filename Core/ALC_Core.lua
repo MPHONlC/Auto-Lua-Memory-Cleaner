@@ -55,6 +55,7 @@ local is_mem_check_queued = false
 local last_priority_save_time = 0
 local is_scene_callback_registered = false
 local chat_error, copy_box, last_cleanup_time, pool_reload_token
+local session_bugs = {}
 
 local REQUIRED_LAM_VERSION = 43
 local REQUIRED_LHAS_VERSION = 20200
@@ -295,12 +296,12 @@ function ALC.dev_simulate_error()
 end
 
 function ALC.dismiss_captured_error()
-	ALC.settings.captured_bugs = nil
+	ZO_ClearNumericallyIndexedTable(session_bugs)
 	ALC.show_bug_report_box()
 end
 
 function ALC.wipe_all_bugs()
-	ALC.settings.captured_bugs = nil
+	ZO_ClearNumericallyIndexedTable(session_bugs)
 	if copy_box then copy_box:Hide() end
 end
 
@@ -308,6 +309,7 @@ function ALC.show_copy_text_box(plain_text)
 	local is_dev = (GetDisplayName() == "@APHONlC")
 	copy_box = copy_box or LibAPH.CreateCopyTextBox({
 		name = "ALCCopyBox",
+		pastebin = true,
 		maxInputChars = LibAPH.BUG_REPORT_MAX_CHARS,
 		closeText = ALC.L("BTN_CLOSE"),
 		titleText = ALC.L("BUG_REPORT_COPY_TITLE"),
@@ -334,7 +336,7 @@ function ALC.show_bug_report_box()
 	LibAPH.LoadLocalization("SI_ALC_", ALC.Lang, "en", "en")
 
 	local bug_lines = {}
-	for _, bug in ipairs(ALC.settings.captured_bugs or {}) do
+	for _, bug in ipairs(session_bugs) do
 		local line = bug.text
 		if bug.count > 1 then
 			line = line .. ALC.L("BUG_REPORT_SEEN_COUNT", bug.count)
@@ -364,9 +366,9 @@ function ALC.show_bug_report_box()
 end
 
 function ALC.hook_error_capture()
+	ALC.settings.captured_bugs = nil
 	LibAPH.HookErrorCapture(ALC.name, function(text)
-		ALC.settings.captured_bugs = ALC.settings.captured_bugs or {}
-		local is_new = LibAPH.RecordCapturedBug(ALC.settings.captured_bugs, text)
+		local is_new = LibAPH.RecordCapturedBug(session_bugs, text)
 		if is_new or (copy_box and not copy_box.window:IsHidden()) then
 			ALC.show_bug_report_box()
 		end

@@ -95,7 +95,7 @@ ALC.Lang.de = {
 	FILE_UNLOADED_BY_USER = "(Entladen)",
 
 	BTN_CLOSE = "Schließen",
-	BUG_REPORT_COPY_TITLE = "IN DEINEN BUGREPORT KOPIEREN UND EINFÜGEN",
+	BUG_REPORT_COPY_TITLE = "DIESEN BUGREPORT KOPIEREN UND EINFÜGEN",
 	BUG_REPORT_COPY_PROMPT = "Kopiere dies und füge es in deinen Fehlerbericht ein:\n\n",
 	BUG_REPORT_NONE_CAPTURED = "Es wurden in dieser Sitzung keine %s-Fehler erfasst.\n\n",
 	BUG_REPORT_DESCRIBE_INSTEAD = "Falls du gerade eine Fehlermeldung auf dem Bildschirm gesehen hast, beschreibe stattdessen im Fehlerbericht, was du zu diesem Zeitpunkt getan hast.",

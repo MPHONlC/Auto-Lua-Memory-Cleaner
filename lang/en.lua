@@ -110,7 +110,7 @@ ALC.Lang.en = {
 
 	-- Popup UI: Bug Report
 	BTN_CLOSE = "Close",
-	BUG_REPORT_COPY_TITLE = "COPY & PASTE THIS TO YOUR BUG REPORT",
+	BUG_REPORT_COPY_TITLE = "COPY & PASTE THIS BUG REPORT",
 	BUG_REPORT_COPY_PROMPT = "Copy this and paste it into your bug report:\n\n",
 	BUG_REPORT_SEEN_COUNT = " (seen %dx)",
 	BUG_REPORT_NONE_CAPTURED = "No %s errors have been captured yet this session.\n\n",
