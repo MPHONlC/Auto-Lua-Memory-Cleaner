@@ -2,23 +2,24 @@
 -- Licensed under the GNU General Public License v3.0 (GPLv3).
 -- See LICENSE.md and NOTICE.md.
 
--- This file must load after Core/ALC_Core.lua.
 if not ALC then return end
+local ALC = ALC
 ALC.Console = ALC.Console or {}
+local ALC_Console = ALC.Console
 
-function ALC.Console.get_active_memory_mb()
+function ALC_Console.get_active_memory_mb()
 	return ALC.get_console_pool_mb()
 end
 
-function ALC.Console.get_threshold()
+function ALC_Console.get_threshold()
 	return ALC.settings.threshold_console
 end
 
-function ALC.Console.get_pool_threshold()
+function ALC_Console.get_pool_threshold()
 	return ALC.settings.pool_threshold_console
 end
 
-function ALC.Console.build_threshold_slider(build_data)
+function ALC_Console.build_threshold_slider(build_data)
 	table.insert(build_data, {
 		type = "slider",
 		name = function() return ALC.L("SLIDER_CONSOLE_LUA_THRESHOLD") end,
@@ -29,7 +30,7 @@ function ALC.Console.build_threshold_slider(build_data)
 	})
 end
 
-function ALC.Console.build_pool_threshold_slider(build_data)
+function ALC_Console.build_pool_threshold_slider(build_data)
 	table.insert(build_data, {
 		type = "slider",
 		name = function() return ALC.L("SLIDER_CONSOLE_POOL_THRESHOLD") end,
@@ -40,7 +41,7 @@ function ALC.Console.build_pool_threshold_slider(build_data)
 	})
 end
 
-function ALC.Console.build_extra_options(build_data)
+function ALC_Console.build_extra_options(build_data)
 	table.insert(build_data, {
 		type = "checkbox",
 		name = function() return ALC.L("CHK_CHAT_LOGS") end,
@@ -49,6 +50,6 @@ function ALC.Console.build_extra_options(build_data)
 	})
 end
 
-function ALC.Console.create_gamepad_mover(target)
+function ALC_Console.create_gamepad_mover(target)
 	return LibAPH.CreateGamepadMover(target)
 end

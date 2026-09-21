@@ -2,8 +2,8 @@
 -- Licensed under the GNU General Public License v3.0 (GPLv3).
 -- See LICENSE.md and NOTICE.md.
 
--- This file must load after Core/ALC_Core.lua.
 if not ALC then return end
+local ALC = ALC
 
 function ALC.migrate_data()
 	if ALC.settings then

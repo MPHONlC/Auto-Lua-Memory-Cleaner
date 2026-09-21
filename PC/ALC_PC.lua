@@ -2,23 +2,24 @@
 -- Licensed under the GNU General Public License v3.0 (GPLv3).
 -- See LICENSE.md and NOTICE.md.
 
--- This file must load after Core/ALC_Core.lua.
 if not ALC then return end
+local ALC = ALC
 ALC.PC = ALC.PC or {}
+local ALC_PC = ALC.PC
 
-function ALC.PC.get_active_memory_mb()
+function ALC_PC.get_active_memory_mb()
 	return ALC.get_hybrid_memory_data()
 end
 
-function ALC.PC.get_threshold()
+function ALC_PC.get_threshold()
 	return ALC.settings.threshold_pc
 end
 
-function ALC.PC.get_pool_threshold()
+function ALC_PC.get_pool_threshold()
 	return ALC.settings.pool_threshold_pc
 end
 
-function ALC.PC.build_threshold_slider(build_data)
+function ALC_PC.build_threshold_slider(build_data)
 	table.insert(build_data, {
 		type = "slider",
 		name = function() return ALC.L("SLIDER_PC_LUA_THRESHOLD") end,
@@ -29,7 +30,7 @@ function ALC.PC.build_threshold_slider(build_data)
 	})
 end
 
-function ALC.PC.build_pool_threshold_slider(build_data)
+function ALC_PC.build_pool_threshold_slider(build_data)
 	table.insert(build_data, {
 		type = "slider",
 		name = function() return ALC.L("SLIDER_PC_POOL_THRESHOLD") end,
@@ -40,7 +41,7 @@ function ALC.PC.build_pool_threshold_slider(build_data)
 	})
 end
 
-function ALC.PC.build_extra_options(build_data)
+function ALC_PC.build_extra_options(build_data)
 	table.insert(build_data, {
 		type = "checkbox",
 		name = function() return ALC.L("CHK_CHAT_LOGS") end,

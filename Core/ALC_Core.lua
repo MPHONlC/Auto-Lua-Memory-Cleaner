@@ -2,8 +2,6 @@
 -- Licensed under the GNU General Public License v3.0 (GPLv3).
 -- See LICENSE.md and NOTICE.md.
 
--- Loads first
-
 local function IsConsoleUI()
 	return IsInGamepadPreferredMode()
 end
@@ -11,7 +9,6 @@ end
 ALC = {
 	name = "AutoLuaMemoryCleaner",
 	version = "0.0.9",
-	schema_version = 2,
 	defaults = {
 		schema_version = 2,
 		is_enabled = true,
@@ -47,22 +44,24 @@ ALC = {
 		pool_reload_test_before_mb = 0,
 		last_pool_reload_time = 0
 	},
-	mem_state = 0,
-	is_mem_check_queued = false,
 	session_mb_freed = 0,
 	session_pool_mb_freed = 0,
-	last_priority_save_time = 0,
-	last_ui_update = 0,
-	is_scene_callback_registered = false,
-	scene_callback_fn = nil,
-	ui_update_fn = nil
 }
+local ALC = ALC
+local ALC_defaults = ALC.defaults
+local SCHEMA_VERSION = 2
+local mem_state = 0
+local is_mem_check_queued = false
+local last_priority_save_time = 0
+local is_scene_callback_registered = false
+local chat_error, copy_box, last_cleanup_time, pool_reload_token
 
-ALC.REQUIRED_LAM_VERSION = 43
-ALC.REQUIRED_LHAS_VERSION = 20200
+local REQUIRED_LAM_VERSION = 43
+local REQUIRED_LHAS_VERSION = 20200
 
 ALC._modules = {}
-ALC.MODULE_FILE_FUNCS = {
+local ALC_modules = ALC._modules
+local MODULE_FILE_FUNCS = {
 	migration = { "migrate_data" },
 	wizard = { "run_wizard", "run_wizard_if_needed" },
 	menu = { "build_language_controls", "build_lam2_menu" },
@@ -75,7 +74,7 @@ function ALC.call_optional(fn, label, ...)
 end
 
 function ALC.toggle_module_disabled(mod_key, silent)
-	local now_disabled = LibAPH.ToggleModuleDisabled(ALC.settings, ALC.MODULE_FILE_FUNCS, mod_key, function(disabled, key)
+	local now_disabled = LibAPH.ToggleModuleDisabled(ALC.settings, MODULE_FILE_FUNCS, mod_key, function(disabled, key)
 		local applied_live = LibAPH.HasModuleLifecycle(key)
 		d("|c00FFFF[ALC]|r " .. (disabled and ALC.L("MODULE_TOGGLE_UNLOADED", key) or ALC.L("MODULE_TOGGLE_REENABLED", key)) ..
 		  (applied_live and ALC.L("MODULE_TOGGLE_LIVE") or ALC.L("MODULE_TOGGLE_RELOAD")))
@@ -84,18 +83,18 @@ function ALC.toggle_module_disabled(mod_key, silent)
 	if not now_disabled then
 		ALC.settings.warned_module_labels = {}
 	end
-	LibAPH.SyncModuleLifecycle(ALC._modules, mod_key, now_disabled)
+	LibAPH.SyncModuleLifecycle(ALC_modules, mod_key, now_disabled)
 	return now_disabled
 end
 
 function ALC.apply_module_disable_overrides()
-	LibAPH.ApplyModuleDisableOverrides(ALC.settings, ALC.MODULE_FILE_FUNCS, ALC._modules, function(fname)
+	LibAPH.ApplyModuleDisableOverrides(ALC.settings, MODULE_FILE_FUNCS, ALC_modules, function(fname)
 		ALC[fname] = nil
 	end)
 end
 
 function ALC.reset_to_defaults()
-	LibAPH.ResetToDefaults(ALC.settings, ALC.defaults, {
+	LibAPH.ResetToDefaults(ALC.settings, ALC_defaults, {
 		wizard_completed = true, has_shown_lib_warning_008 = true
 	})
 end
@@ -110,9 +109,13 @@ end
 
 ALC.PC = ALC.PC or {}
 ALC.Console = ALC.Console or {}
+local ALC_PC = ALC.PC
+local ALC_Console = ALC.Console
+local trigger_memory_check
+local scene_callback_fn
 
 local function get_platform_module()
-	return IsConsoleUI() and ALC.Console or ALC.PC
+	return IsConsoleUI() and ALC_Console or ALC_PC
 end
 
 function ALC.get_active_memory_mb()
@@ -121,13 +124,13 @@ function ALC.get_active_memory_mb()
 	return ALC.get_hybrid_memory_data()
 end
 
-function ALC.get_active_threshold()
+local function get_active_threshold()
 	local mod = get_platform_module()
 	if mod.get_threshold then return mod.get_threshold() end
 	return ALC.settings.threshold_pc
 end
 
-function ALC.get_active_pool_threshold()
+local function get_active_pool_threshold()
 	local mod = get_platform_module()
 	if mod.get_pool_threshold then return mod.get_pool_threshold() end
 	return ALC.settings.pool_threshold_pc
@@ -173,7 +176,7 @@ function ALC.get_settings_library()
 	return lam_v, lam_e, lhas_v, lhas_e
 end
 
-function ALC.format_memory(value_mb)
+local function format_memory(value_mb)
 	if value_mb >= 1048576 then return string.format("%.2f TB", value_mb / 1048576)
 	elseif value_mb >= 1024 then return string.format("%.2f GB", value_mb / 1024)
 	elseif value_mb >= 1 then return string.format("%.2f MB", value_mb)
@@ -189,34 +192,34 @@ function ALC.get_today_date_str()
 	return GetDateStringFromTimestamp(GetTimeStamp())
 end
 
-ALC.COLOR_LUA_ACTIVE = "|c00FF00"
-ALC.COLOR_POOL_ACTIVE = "|c00FFFF"
-ALC.COLOR_CLEANED = "|c888888"
+local COLOR_LUA_ACTIVE = "|c00FF00"
+local COLOR_POOL_ACTIVE = "|c00FFFF"
+local COLOR_CLEANED = "|c888888"
 
-function ALC.get_lua_status_color(mb)
-	if mb >= 512 then return "|cFF0000" elseif mb >= 320 then return "|cFFA500" else return ALC.COLOR_LUA_ACTIVE end
+local function get_lua_status_color(mb)
+	if mb >= 512 then return "|cFF0000" elseif mb >= 320 then return "|cFFA500" else return COLOR_LUA_ACTIVE end
 end
-function ALC.get_pool_status_color(mb)
+local function get_pool_status_color(mb)
 	local cap = GetTotalUserAddOnMemoryPoolCapacityMB() or 100
-	if mb >= cap then return "|cFF0000" elseif mb >= cap * 0.6 then return "|cFFA500" else return ALC.COLOR_POOL_ACTIVE end
+	if mb >= cap then return "|cFF0000" elseif mb >= cap * 0.6 then return "|cFFA500" else return COLOR_POOL_ACTIVE end
 end
 
-function ALC.build_memory_fragment(label, color, current_mb, cleaned_mb)
-	local base = string.format("%s: %s%s|r", label, color, ALC.format_memory(current_mb))
+local function build_memory_fragment(label, color, current_mb, cleaned_mb)
+	local base = string.format("%s: %s%s|r", label, color, format_memory(current_mb))
 	if cleaned_mb and cleaned_mb > 0.001 then
-		base = base .. string.format(" %s(-%s)|r", ALC.COLOR_CLEANED, ALC.format_memory(cleaned_mb))
+		base = base .. string.format(" %s(-%s)|r", COLOR_CLEANED, format_memory(cleaned_mb))
 	end
 	return base
 end
 
 function ALC.build_memory_status_line(current_lua, lua_cleaned, current_pool, pool_cleaned)
-	return ALC.build_memory_fragment(ALC.L("LABEL_LUA"), ALC.get_lua_status_color(current_lua), current_lua, lua_cleaned) ..
-		"  " .. ALC.build_memory_fragment(ALC.L("LABEL_POOL"), ALC.get_pool_status_color(current_pool), current_pool, pool_cleaned)
+	return build_memory_fragment(ALC.L("LABEL_LUA"), get_lua_status_color(current_lua), current_lua, lua_cleaned) ..
+		"  " .. build_memory_fragment(ALC.L("LABEL_POOL"), get_pool_status_color(current_pool), current_pool, pool_cleaned)
 end
 
-function ALC.build_memory_status_lines(current_lua, lua_cleaned, current_pool, pool_cleaned)
-	return ALC.build_memory_fragment(ALC.L("LABEL_LUA"), ALC.get_lua_status_color(current_lua), current_lua, lua_cleaned) ..
-		"\n" .. ALC.build_memory_fragment(ALC.L("LABEL_POOL"), ALC.get_pool_status_color(current_pool), current_pool, pool_cleaned)
+local function build_memory_status_lines(current_lua, lua_cleaned, current_pool, pool_cleaned)
+	return build_memory_fragment(ALC.L("LABEL_LUA"), get_lua_status_color(current_lua), current_lua, lua_cleaned) ..
+		"\n" .. build_memory_fragment(ALC.L("LABEL_POOL"), get_pool_status_color(current_pool), current_pool, pool_cleaned)
 end
 
 local function format_lib(ver, en, name, req)
@@ -237,13 +240,13 @@ local ALC_MODULE_FILES = {
 }
 
 local function alc_module_state(mod_key)
-	return (ALC._modules[mod_key] == false) and "unloaded" or "loaded"
+	return (ALC_modules[mod_key] == false) and "unloaded" or "loaded"
 end
 
 function ALC.build_client_info_text()
 	local lam_ver, lam_en, lhas_ver, lhas_en = ALC.get_settings_library()
-	local lam_str = format_lib(lam_ver, lam_en, "LAM2", ALC.REQUIRED_LAM_VERSION)
-	local lhas_str = format_lib(lhas_ver, lhas_en, "LHAS", ALC.REQUIRED_LHAS_VERSION)
+	local lam_str = format_lib(lam_ver, lam_en, "LAM2", REQUIRED_LAM_VERSION)
+	local lhas_str = format_lib(lhas_ver, lhas_en, "LHAS", REQUIRED_LHAS_VERSION)
 
 	local install_date = ALC.settings.install_date or ALC.L("INSTALL_DATE_UNKNOWN")
 	local today_str = ALC.get_today_date_str()
@@ -298,12 +301,12 @@ end
 
 function ALC.wipe_all_bugs()
 	ALC.settings.captured_bugs = nil
-	if ALC.copy_box then ALC.copy_box:Hide() end
+	if copy_box then copy_box:Hide() end
 end
 
 function ALC.show_copy_text_box(plain_text)
 	local is_dev = (GetDisplayName() == "@APHONlC")
-	ALC.copy_box = ALC.copy_box or LibAPH.CreateCopyTextBox({
+	copy_box = copy_box or LibAPH.CreateCopyTextBox({
 		name = "ALCCopyBox",
 		closeText = ALC.L("BTN_CLOSE"),
 		titleText = ALC.L("BUG_REPORT_COPY_TITLE"),
@@ -311,7 +314,7 @@ function ALC.show_copy_text_box(plain_text)
 		dismissBug = { text = "Dismiss Bug", onClick = ALC.dismiss_captured_error },
 		wipeAllBugs = { text = "Wipe All Bugs", onClick = ALC.wipe_all_bugs },
 	})
-	ALC.copy_box:Show(plain_text)
+	copy_box:Show(plain_text)
 end
 
 function ALC.get_bug_report_settings_fields()
@@ -362,7 +365,7 @@ function ALC.hook_error_capture()
 	LibAPH.HookErrorCapture(ALC.name, function(text)
 		ALC.settings.captured_bugs = ALC.settings.captured_bugs or {}
 		local is_new = LibAPH.RecordCapturedBug(ALC.settings.captured_bugs, text)
-		if is_new or (ALC.copy_box and not ALC.copy_box.window:IsHidden()) then
+		if is_new or (copy_box and not copy_box.window:IsHidden()) then
 			ALC.show_bug_report_box()
 		end
 	end)
@@ -394,7 +397,7 @@ function ALC.toggle_core_events()
 	if ALC.settings.is_enabled then
 		EVENT_MANAGER:RegisterForEvent(ALC.name .. "_CombatState", EVENT_PLAYER_COMBAT_STATE,
 			function(event_code, in_combat)
-				if not in_combat then ALC.trigger_memory_check("CombatEnd", 3000) end
+				if not in_combat then trigger_memory_check("CombatEnd", 3000) end
 			end
 		)
 		if IsConsoleUI() then
@@ -403,41 +406,41 @@ function ALC.toggle_core_events()
 		EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_AutoSweep", 5000,
 			function()
 				if not IsPlayerMoving() then
-					ALC.trigger_memory_check("Idle", 1000)
+					trigger_memory_check("Idle", 1000)
 				else
-					ALC.trigger_memory_check("AutoSweep", 0)
+					trigger_memory_check("AutoSweep", 0)
 				end
 			end
 		)
 
-		if not ALC.is_scene_callback_registered then
-			ALC.scene_callback_fn = function(old_state, new_state)
+		if not is_scene_callback_registered then
+			scene_callback_fn = function(old_state, new_state)
 				if new_state ~= SCENE_HIDDEN then return end
 				local next_scene = SCENE_MANAGER:GetNextScene()
 				if next_scene and not HUD_SCENE_NAMES[next_scene:GetName()] then
-					ALC.trigger_memory_check("Menu", 6000)
+					trigger_memory_check("Menu", 6000)
 				end
 			end
 			for name in pairs(HUD_SCENE_NAMES) do
 				local scene = SCENE_MANAGER:GetScene(name)
-				if scene then scene:RegisterCallback("StateChange", ALC.scene_callback_fn) end
+				if scene then scene:RegisterCallback("StateChange", scene_callback_fn) end
 			end
-			ALC.is_scene_callback_registered = true
+			is_scene_callback_registered = true
 		end
 	else
 		EVENT_MANAGER:UnregisterForEvent(ALC.name .. "_CombatState", EVENT_PLAYER_COMBAT_STATE)
 		EVENT_MANAGER:UnregisterForEvent(ALC.name .. "_LowMem", EVENT_LUA_LOW_MEMORY)
 		EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_AutoSweep")
-		if ALC.is_scene_callback_registered then
+		if is_scene_callback_registered then
 			for name in pairs(HUD_SCENE_NAMES) do
 				local scene = SCENE_MANAGER:GetScene(name)
-				if scene then scene:UnregisterCallback("StateChange", ALC.scene_callback_fn) end
+				if scene then scene:UnregisterCallback("StateChange", scene_callback_fn) end
 			end
-			ALC.is_scene_callback_registered = false
+			is_scene_callback_registered = false
 		end
 		EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
-		ALC.mem_state = 0
-		ALC.is_mem_check_queued = false
+		mem_state = 0
+		is_mem_check_queued = false
 	end
 end
 
@@ -467,12 +470,12 @@ local function alc_run_gc_pass(opts)
 end
 
 function ALC.run_manual_cleanup(force_feedback)
-	ALC.mem_state = 1
-	ALC.last_cleanup_time = GetGameTimeMilliseconds()
+	mem_state = 1
+	last_cleanup_time = GetGameTimeMilliseconds()
 	alc_run_gc_pass({
 		getPoolMB = ALC.get_console_pool_mb,
 		onDone = function(before_lua, after_lua, freed, before_pool, after_pool, freed_pool)
-			ALC.mem_state = 0
+			mem_state = 0
 
 			if freed > 0.001 or freed_pool > 0.001 then
 				ALC.session_mb_freed = ALC.session_mb_freed + freed
@@ -483,13 +486,13 @@ function ALC.run_manual_cleanup(force_feedback)
 				if ALC.settings.is_log_enabled then
 					ALC.chat:Print(msg)
 				end
-				ALC.safe_csa(ALC.L("CSA_TITLE_CLEANED"), ALC.build_memory_status_lines(after_lua, freed, after_pool, freed_pool))
+				ALC.safe_csa(ALC.L("CSA_TITLE_CLEANED"), build_memory_status_lines(after_lua, freed, after_pool, freed_pool))
 			elseif force_feedback then
 				local msg = ALC.build_memory_status_line(after_lua, 0, after_pool, 0) .. " |c888888" .. ALC.L("LABEL_ALREADY_CLEAN") .. "|r"
 				if ALC.settings.is_log_enabled then
 					ALC.chat:Print(msg)
 				end
-				ALC.safe_csa(ALC.L("CSA_TITLE_ALREADY_CLEAN"), ALC.build_memory_status_lines(after_lua, 0, after_pool, 0))
+				ALC.safe_csa(ALC.L("CSA_TITLE_ALREADY_CLEAN"), build_memory_status_lines(after_lua, 0, after_pool, 0))
 			end
 
 			if ALC.settings.show_ui then ALC.call_optional(ALC.update_ui, "UI module (update_ui)") end
@@ -497,16 +500,16 @@ function ALC.run_manual_cleanup(force_feedback)
 	})
 end
 
-function ALC.trigger_memory_check(check_type, delay)
+function trigger_memory_check(check_type, delay)
 	if not ALC.settings.is_enabled then return end
-	if ALC.mem_state == 1 or ALC.is_mem_check_queued then return end
+	if mem_state == 1 or is_mem_check_queued then return end
 
 	local now_ms = GetGameTimeMilliseconds()
 	local fallback_ms = ALC.settings.fallback_delay_sec * 1000
-	if (now_ms - (ALC.last_cleanup_time or 0)) < fallback_ms then return end
+	if (now_ms - (last_cleanup_time or 0)) < fallback_ms then return end
 
 	local current_metric = ALC.get_active_memory_mb()
-	local limit_threshold = ALC.get_active_threshold()
+	local limit_threshold = get_active_threshold()
 
 	if current_metric >= limit_threshold then
 		local in_combat = IsUnitInCombat("player")
@@ -515,10 +518,10 @@ function ALC.trigger_memory_check(check_type, delay)
 			return
 		end
 
-		ALC.is_mem_check_queued = true
+		is_mem_check_queued = true
 		zo_callLater(function()
-			ALC.is_mem_check_queued = false
-			if ALC.mem_state == 1 then return end
+			is_mem_check_queued = false
+			if mem_state == 1 then return end
 
 			local still_in_combat = IsUnitInCombat("player")
 			if still_in_combat or IsUnitDead("player") then
@@ -539,13 +542,13 @@ function ALC.trigger_memory_check(check_type, delay)
 				EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
 				EVENT_MANAGER:RegisterForUpdate(ALC.name .. "_Fallback",
 					ALC.settings.fallback_delay_sec * 1000,
-					function() ALC.trigger_memory_check("Fallback", 0) end
+					function() trigger_memory_check("Fallback", 0) end
 				)
 			end
 		end, delay)
 	else
 		EVENT_MANAGER:UnregisterForUpdate(ALC.name .. "_Fallback")
-		ALC.mem_state = 0
+		mem_state = 0
 	end
 end
 
@@ -583,12 +586,12 @@ function ALC.show_missing_library_warning()
 	}
 
 	local alerts = {}
-	local lam_alert = LibAPH.BuildLibraryWarning(libwarn_templates, "LibAddonMenu", "LAM", lam_ver, lam_en, ALC.REQUIRED_LAM_VERSION,
+	local lam_alert = LibAPH.BuildLibraryWarning(libwarn_templates, "LibAddonMenu", "LAM", lam_ver, lam_en, REQUIRED_LAM_VERSION,
 		ALC.L("LIBWARN_CONSEQUENCE_LAM"))
 	if lam_alert then table.insert(alerts, lam_alert) end
 
 	if IsConsoleUI() then
-		local lhas_alert = LibAPH.BuildLibraryWarning(libwarn_templates, "LibHarvensAddonSettings", "LHAS", lhas_ver, lhas_en, ALC.REQUIRED_LHAS_VERSION,
+		local lhas_alert = LibAPH.BuildLibraryWarning(libwarn_templates, "LibHarvensAddonSettings", "LHAS", lhas_ver, lhas_en, REQUIRED_LHAS_VERSION,
 			ALC.L("LIBWARN_CONSEQUENCE_LHAS"))
 		if lhas_alert then table.insert(alerts, lhas_alert) end
 	end
@@ -603,9 +606,9 @@ function ALC.show_missing_library_warning()
 		local function on_ack()
 			ALC.settings.has_shown_lib_warning_008 = true
 			local tick_ms = GetGameTimeMilliseconds()
-			if (tick_ms - ALC.last_priority_save_time) >= 900000 then
+			if (tick_ms - last_priority_save_time) >= 900000 then
 				GetAddOnManager():RequestAddOnSavedVariablesPrioritySave(ALC.name)
-				ALC.last_priority_save_time = tick_ms
+				last_priority_save_time = tick_ms
 			end
 		end
 
@@ -628,7 +631,7 @@ function ALC.show_missing_library_warning()
 	local combined_msg = table.concat(alerts, "\n")
 
 	LibAPH.RunWhenPlayerActivated(ALC.name .. "_LibWarnChat", function()
-		ALC.chat_error:Print(combined_msg)
+		chat_error:Print(combined_msg)
 
 		if not ALC.settings.has_shown_lib_warning_008 then
 			local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, SOUNDS.NONE)
@@ -641,11 +644,11 @@ end
 
 local pool_reload_confirmed
 
-function ALC.on_player_teleported()
+local function on_player_teleported()
 	if not ALC.settings.auto_clear_pool_on_teleport then return end
 
 	local pool_mb = ALC.get_console_pool_mb()
-	if pool_mb < ALC.get_active_pool_threshold() then return end
+	if pool_mb < get_active_pool_threshold() then return end
 
 	local now = GetTimeStamp()
 	if (now - (ALC.settings.last_pool_reload_time or 0)) < ALC.settings.fallback_delay_sec then return end
@@ -658,8 +661,8 @@ function ALC.on_player_teleported()
 	local reload_delay_sec = ALC.settings.pool_reload_delay_sec or 3
 	ALC.safe_csa("|c00FFFF" .. ALC.L("CHAT_POOL_RELOAD_NOTICE", reload_delay_sec) .. "|r")
 
-	ALC.pool_reload_token = (ALC.pool_reload_token or 0) + 1
-	local my_token = ALC.pool_reload_token
+	pool_reload_token = (pool_reload_token or 0) + 1
+	local my_token = pool_reload_token
 
 	if ALC.settings.pool_reload_confirm_auto then
 		pool_reload_confirmed = true
@@ -667,10 +670,10 @@ function ALC.on_player_teleported()
 		pool_reload_confirmed = nil
 		LibAPH.ShowDialogChained("ALC_POOL_RELOAD_CONFIRM", ALC.L("DLG_POOL_RELOAD_CONFIRM_TITLE"), ALC.L("DLG_POOL_RELOAD_CONFIRM_BODY"), {
 			{ text = ALC.L("BTN_CONFIRM"), callback = function()
-				if ALC.pool_reload_token == my_token then pool_reload_confirmed = true end
+				if pool_reload_token == my_token then pool_reload_confirmed = true end
 			end },
 			{ text = ALC.L("BTN_SKIP"), callback = function()
-				if ALC.pool_reload_token == my_token then pool_reload_confirmed = false end
+				if pool_reload_token == my_token then pool_reload_confirmed = false end
 			end },
 		})
 		zo_callLater(function()
@@ -681,7 +684,7 @@ function ALC.on_player_teleported()
 	end
 
 	zo_callLater(function()
-		if ALC.pool_reload_token ~= my_token
+		if pool_reload_token ~= my_token
 			or not pool_reload_confirmed
 			or not IsPlayerActivated()
 			or IsUnitInCombat("player")
@@ -693,7 +696,7 @@ function ALC.on_player_teleported()
 	end, reload_delay_sec * 1000)
 end
 
-function ALC.report_pool_reload_result(before_pool, before_lua, after_pool)
+local function report_pool_reload_result(before_pool, before_lua, after_pool)
 	local after_lua = ALC.get_hybrid_memory_data()
 	local freed_pool = math.max(before_pool - after_pool, 0)
 	local freed_lua = math.max(before_lua - after_lua, 0)
@@ -704,11 +707,11 @@ function ALC.report_pool_reload_result(before_pool, before_lua, after_pool)
 	if ALC.settings.is_log_enabled then
 		ALC.chat:Print(ALC.build_memory_status_line(after_lua, freed_lua, after_pool, freed_pool))
 	end
-	ALC.safe_csa(ALC.L("CSA_TITLE_POOL_CLEARED"), ALC.build_memory_status_lines(after_lua, freed_lua, after_pool, freed_pool))
+	ALC.safe_csa(ALC.L("CSA_TITLE_POOL_CLEARED"), build_memory_status_lines(after_lua, freed_lua, after_pool, freed_pool))
 	if ALC.settings.show_ui then ALC.call_optional(ALC.update_ui, "UI module (update_ui)") end
 end
 
-function ALC.check_pool_reload_test_result()
+local function check_pool_reload_test_result()
 	if not ALC.settings.pool_reload_test_pending then return end
 	ALC.settings.pool_reload_test_pending = false
 
@@ -720,7 +723,7 @@ function ALC.check_pool_reload_test_result()
 		local cur_pool = ALC.get_console_pool_mb()
 		local settled = last_reading and math.abs(cur_pool - last_reading) < 0.01
 		if settled or attempt >= 6 then
-			ALC.report_pool_reload_result(before_pool, before_lua, cur_pool)
+			report_pool_reload_result(before_pool, before_lua, cur_pool)
 			return
 		end
 		last_reading = cur_pool
@@ -735,7 +738,7 @@ function ALC.init(event_code, addon_name)
 	EVENT_MANAGER:UnregisterForEvent(ALC.name, EVENT_ADD_ON_LOADED)
 
 	ALC.chat = LibAPH.CreateChatLogger("ALC", "00FFFF")
-	ALC.chat_error = LibAPH.CreateChatLogger("ALC Error", "FF0000")
+	chat_error = LibAPH.CreateChatLogger("ALC Error", "FF0000")
 
 	LibAPH.RegisterAddonDependencies(ALC.name, { "LibAPH" }, { "LibAddonMenu-2.0", "LibHarvensAddonSettings" })
 
@@ -752,15 +755,15 @@ function ALC.init(event_code, addon_name)
 	local existing_ns = _G[sv_name] and _G[sv_name]["Default"] and _G[sv_name]["Default"][account]
 		and _G[sv_name]["Default"][account]["$AccountWide"]
 	local existing_data = existing_ns and existing_ns[active_world]
-	if existing_data and existing_data.schema_version ~= ALC.schema_version then
+	if existing_data and existing_data.schema_version ~= SCHEMA_VERSION then
 		existing_ns[active_world] = nil
 		d("|c00FFFF[ALC]|r " .. ALC.L("CHAT_SETTINGS_RESET_OLDVERSION"))
 	end
 
 	ALC.settings = ZO_SavedVars:NewAccountWide(
-		sv_name, 1, active_world, ALC.defaults
+		sv_name, 1, active_world, ALC_defaults
 	)
-	ALC.settings.schema_version = ALC.schema_version
+	ALC.settings.schema_version = SCHEMA_VERSION
 
 	if ALC.settings.override_language then
 		LibAPH.LoadLocalization("SI_ALC_", ALC.Lang, "en", ALC.settings.override_language)
@@ -779,7 +782,7 @@ function ALC.init(event_code, addon_name)
 		ALC.settings.migrated_version = ALC.version
 		ALC.settings.module_disabled.migration = true
 	end
-	ALC.check_pool_reload_test_result()
+	check_pool_reload_test_result()
 
 	if not ALC.settings.install_date then
 		ALC.settings.install_date = ALC.get_today_date_str()
@@ -800,12 +803,12 @@ function ALC.init(event_code, addon_name)
 	ALC.call_optional(ALC.run_wizard_if_needed, "Wizard module (run_wizard_if_needed)")
 
 	EVENT_MANAGER:RegisterForEvent(ALC.name, EVENT_PLAYER_ACTIVATED, function()
-		ALC.trigger_memory_check("ZoneLoad", 5000)
-		ALC.on_player_teleported()
+		trigger_memory_check("ZoneLoad", 5000)
+		on_player_teleported()
 	end)
 
 	EVENT_MANAGER:RegisterForEvent(ALC.name .. "_PoolReloadGuard", EVENT_PLAYER_DEACTIVATED, function()
-		ALC.pool_reload_token = (ALC.pool_reload_token or 0) + 1
+		pool_reload_token = (pool_reload_token or 0) + 1
 	end)
 
 	ALC.register_slash_commands()

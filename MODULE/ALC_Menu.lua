@@ -2,14 +2,14 @@
 -- Licensed under the GNU General Public License v3.0 (GPLv3).
 -- See LICENSE.md and NOTICE.md.
 
--- This file must load after Core/ALC_Core.lua.
 if not ALC then return end
+local ALC = ALC
+local ALC_modules = ALC._modules
+local lam_panel, pending_language
 
 local function IsConsoleUI()
 	return IsInGamepadPreferredMode()
 end
-
-ALC.pending_language = nil
 
 function ALC.build_language_controls()
 	local is_pad = IsConsoleUI() or IsInGamepadPreferredMode()
@@ -22,8 +22,8 @@ function ALC.build_language_controls()
 		getAvailableLanguages = ALC.get_available_languages,
 		getLanguageDisplayName = ALC.get_language_display_name,
 		reference = "ALC_LangDropdown",
-		getPending = function() return ALC.pending_language end,
-		setPending = function(v) ALC.pending_language = v end,
+		getPending = function() return pending_language end,
+		setPending = function(v) pending_language = v end,
 		formatCurrentLanguageText = function(overrideLanguage)
 			local cur = overrideLanguage or GetCVar("Language.2")
 			return ALC.get_language_display_name(cur)
@@ -332,7 +332,7 @@ function ALC.build_lam2_menu()
 			width = "full"
 		}
 	}
-	if ALC._modules.wizard then
+	if ALC_modules.wizard then
 		table.insert(adv_controls, {
 			type = "button",
 			name = function() return "|c00FFFF" .. ALC.L("MENU_RUN_WIZARD") .. "|r" end,
@@ -417,11 +417,11 @@ function ALC.build_lam2_menu()
 		})
 	end
 
-	local menu_refresher = LibAPH.CreateMenuLabelRefresher("ALC_MRC_", function() return ALC.lam_panel end)
+	local menu_refresher = LibAPH.CreateMenuLabelRefresher("ALC_MRC_", function() return lam_panel end)
 	menu_refresher.CollectFrom(build_data)
 	ALC.refresh_control_labels = menu_refresher.Refresh
 
-	ALC.lam_panel = lib_lam:RegisterAddonPanel("AutoLuaCleanerOptions", menu_header)
+	lam_panel = lib_lam:RegisterAddonPanel("AutoLuaCleanerOptions", menu_header)
 	lib_lam:RegisterOptionControls("AutoLuaCleanerOptions", build_data)
 
 	local persisted_submenus = {
@@ -430,7 +430,7 @@ function ALC.build_lam2_menu()
 	}
 
 	local function on_panel_controls_created(panel)
-		if panel ~= ALC.lam_panel then return end
+		if panel ~= lam_panel then return end
 		CALLBACK_MANAGER:UnregisterCallback("LAM-PanelControlsCreated", on_panel_controls_created)
 		if not is_pad then
 			for _, ref in ipairs(persisted_submenus) do
@@ -442,4 +442,4 @@ function ALC.build_lam2_menu()
 	CALLBACK_MANAGER:RegisterCallback("LAM-PanelControlsCreated", on_panel_controls_created)
 end
 
-ALC._modules.menu = true
+ALC_modules.menu = true

@@ -2,12 +2,16 @@
 -- Licensed under the GNU General Public License v3.0 (GPLv3).
 -- See LICENSE.md and NOTICE.md.
 
--- This file must load after Core/ALC_Core.lua.
 if not ALC then return end
+local ALC = ALC
+local ALC_Console = ALC.Console
+local ui_update_fn
+local last_ui_update = 0
+local ui_label
 
 function ALC.get_gamepad_mover(target)
-	if ALC.Console.create_gamepad_mover then
-		return ALC.Console.create_gamepad_mover(target)
+	if ALC_Console.create_gamepad_mover then
+		return ALC_Console.create_gamepad_mover(target)
 	end
 	return nil
 end
@@ -15,7 +19,7 @@ end
 function ALC.toggle_ui_update()
 	if not ALC.ui_window then return end
 	if ALC.settings.show_ui then
-		ALC.ui_window:SetHandler("OnUpdate", ALC.ui_update_fn)
+		ALC.ui_window:SetHandler("OnUpdate", ui_update_fn)
 	else
 		ALC.ui_window:SetHandler("OnUpdate", nil)
 	end
@@ -43,9 +47,9 @@ function ALC.update_ui()
 	local status_line = ALC.build_memory_status_line(
 		current_lua, ALC.session_mb_freed, pool_mb, ALC.session_pool_mb_freed
 	)
-	ALC.ui_label:SetText(combat_str .. status_line)
+	ui_label:SetText(combat_str .. status_line)
 
-	local needed_width = ALC.ui_label:GetTextWidth() + 20
+	local needed_width = ui_label:GetTextWidth() + 20
 	local target_width = math.max(ALC.settings.ui_width or 0, needed_width)
 	local target_height = ALC.settings.ui_height or 40
 	if target_width ~= ALC.ui_window:GetWidth() or target_height ~= ALC.ui_window:GetHeight() then
@@ -82,12 +86,12 @@ function ALC.create_ui()
 		end)
 	end
 
-	ALC.ui_label = text_lbl
+	ui_label = text_lbl
 
-	ALC.ui_update_fn = function(ctrl, frame_time)
+	ui_update_fn = function(ctrl, frame_time)
 		if not ALC.settings.show_ui then return end
-		if frame_time - ALC.last_ui_update < 1.0 then return end
-		ALC.last_ui_update = frame_time
+		if frame_time - last_ui_update < 1.0 then return end
+		last_ui_update = frame_time
 		ALC.update_ui()
 	end
 	ALC.hud_fragment = ZO_HUDFadeSceneFragment:New(win)
