@@ -305,11 +305,12 @@ function ALC.wipe_all_bugs()
 	if copy_box then copy_box:Hide() end
 end
 
-function ALC.show_copy_text_box(plain_text)
+function ALC.show_copy_text_box(sections, has_errors)
 	local is_dev = (GetDisplayName() == "@APHONlC")
 	copy_box = copy_box or LibAPH.CreateCopyTextBox({
 		name = "ALCCopyBox",
 		pastebin = true,
+		sections = true,
 		maxInputChars = LibAPH.BUG_REPORT_MAX_CHARS,
 		closeText = ALC.L("BTN_CLOSE"),
 		titleText = ALC.L("BUG_REPORT_COPY_TITLE"),
@@ -317,7 +318,7 @@ function ALC.show_copy_text_box(plain_text)
 		dismissBug = { text = "Dismiss Bug", onClick = ALC.dismiss_captured_error },
 		wipeAllBugs = { text = "Wipe All Bugs", onClick = ALC.wipe_all_bugs },
 	})
-	copy_box:Show(plain_text)
+	copy_box:ShowReport(sections, has_errors)
 end
 
 function ALC.get_bug_report_settings_fields()
@@ -353,16 +354,24 @@ function ALC.show_bug_report_box()
 	local on_word, off_word = ALC.L("WORD_ON"), ALC.L("WORD_OFF")
 	local settings_lines = LibAPH.FormatSettingsSnapshot(ALC.settings, ALC.get_bug_report_settings_fields(), on_word, off_word)
 
-	local text = LibAPH.BuildBugReportText({
+	local sections = LibAPH.BuildBugReportSections({
 		statsText = ALC.build_client_info_text(),
 		settingsLines = settings_lines,
 		fieldSettingsLabel = ALC.L("FIELD_SETTINGS"),
 		errorSection = error_section,
-		headFieldLabels = { ALC.L("FIELD_PLATFORM"), ALC.L("FIELD_CURRENT_LANGUAGE") },
+		fieldLabels = {
+			platform = ALC.L("FIELD_PLATFORM"),
+			language = ALC.L("FIELD_CURRENT_LANGUAGE"),
+			installed = ALC.L("FIELD_INSTALLED_SINCE"),
+			version_history = ALC.L("FIELD_VERSION_HISTORY"),
+			library_version = ALC.L("FIELD_LIBRARY_VERSION"),
+			wizard = ALC.L("FIELD_WIZARD"),
+			files = ALC.L("FIELD_FILES"),
+		},
 	})
 
 	LibAPH.LoadLocalization("SI_ALC_", ALC.Lang, "en", ALC.settings.override_language)
-	ALC.show_copy_text_box(text)
+	ALC.show_copy_text_box(sections, #session_bugs > 0)
 end
 
 function ALC.hook_error_capture()
