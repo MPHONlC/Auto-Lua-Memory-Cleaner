@@ -34,7 +34,7 @@ function ALC_PC.build_pool_threshold_slider(build_data)
 	table.insert(build_data, {
 		type = "slider",
 		name = function() return ALC.L("SLIDER_PC_POOL_THRESHOLD") end,
-		min = 0.01, max = 85, step = 0.5, decimals = 2,
+		min = 0.01, max = 800, step = 0.5, decimals = 2,
 		getFunc = function() return ALC.settings.pool_threshold_pc end,
 		setFunc = function(v) ALC.settings.pool_threshold_pc = v end,
 		disabled = function() return not ALC.settings.auto_clear_pool_on_teleport end
