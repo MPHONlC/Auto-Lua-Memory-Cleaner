@@ -1,4 +1,4 @@
-### Version 0.0.9 <sub>*(09/11/2026)*</sub>
+### Version 0.0.9 <sub>*(09/22/2026)*</sub>
 
 #### Technical Style & Logic
 * Now depends on LibAPH, a shared helper library for my addons.
