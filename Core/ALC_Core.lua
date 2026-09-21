@@ -358,7 +358,7 @@ function ALC.show_bug_report_box()
 		settingsLines = settings_lines,
 		fieldSettingsLabel = ALC.L("FIELD_SETTINGS"),
 		errorSection = error_section,
-		environmentText = LibAPH.BuildEnvironmentReport(),
+		headFieldLabels = { ALC.L("FIELD_PLATFORM"), ALC.L("FIELD_CURRENT_LANGUAGE") },
 	})
 
 	LibAPH.LoadLocalization("SI_ALC_", ALC.Lang, "en", ALC.settings.override_language)
