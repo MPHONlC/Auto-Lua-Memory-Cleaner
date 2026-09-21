@@ -42,7 +42,8 @@ ALC = {
 		pool_reload_delay_sec = 3,
 		pool_reload_test_pending = false,
 		pool_reload_test_before_mb = 0,
-		last_pool_reload_time = 0
+		last_pool_reload_time = 0,
+		pool_reload_stuck_client_start = 0
 	},
 	session_mb_freed = 0,
 	session_pool_mb_freed = 0,
@@ -656,12 +657,24 @@ function ALC.show_missing_library_warning()
 end
 
 local pool_reload_confirmed
+local POOL_RELOAD_MIN_FREED_MB = 0.5
+local CLIENT_START_TOLERANCE_SEC = 5
+
+local function get_client_start_time()
+	return GetTimeStamp() - math.floor(GetGameTimeMilliseconds() / 1000)
+end
+
+local function is_pool_reload_stuck_this_session()
+	local stuck_start = ALC.settings.pool_reload_stuck_client_start or 0
+	return stuck_start > 0 and math.abs(get_client_start_time() - stuck_start) <= CLIENT_START_TOLERANCE_SEC
+end
 
 local function on_player_teleported()
 	if not ALC.settings.auto_clear_pool_on_teleport then return end
 
 	local pool_mb = ALC.get_console_pool_mb()
 	if pool_mb < get_active_pool_threshold() then return end
+	if is_pool_reload_stuck_this_session() then return end
 
 	local now = GetTimeStamp()
 	if (now - (ALC.settings.last_pool_reload_time or 0)) < ALC.settings.fallback_delay_sec then return end
@@ -712,6 +725,15 @@ end
 local function report_pool_reload_result(before_pool, before_lua, after_pool)
 	local after_lua = ALC.get_hybrid_memory_data()
 	local freed_pool = math.max(before_pool - after_pool, 0)
+	if freed_pool < POOL_RELOAD_MIN_FREED_MB then
+		ALC.settings.pool_reload_stuck_client_start = get_client_start_time()
+		if ALC.settings.is_log_enabled then
+			ALC.chat:Print("|cFFA500" .. ALC.L("CHAT_POOL_RELOAD_STUCK", after_pool) .. "|r")
+		end
+		ALC.safe_csa(ALC.L("CSA_TITLE_POOL_STUCK"), ALC.L("CHAT_POOL_RELOAD_STUCK", after_pool))
+		if ALC.settings.show_ui then ALC.call_optional(ALC.update_ui, "UI module (update_ui)") end
+		return
+	end
 	local freed_lua = math.max(before_lua - after_lua, 0)
 
 	if freed_lua > 0.01 then ALC.session_mb_freed = ALC.session_mb_freed + freed_lua end

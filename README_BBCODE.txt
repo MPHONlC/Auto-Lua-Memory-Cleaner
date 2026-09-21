@@ -73,6 +73,8 @@ They share a single global memory pool. It is technically impossible to accurate
 per individual addon without breaking shared libraries and cross-addon communication.
 
 [b][COLOR="Orange"]⚠️ Important Note On Memory Usage [COLOR="Gray"][i](PC & Console)[/i][/COLOR]: ⚠️[/COLOR][/b]
+
+If an automatic pool reload frees less than 0.5 MB (this can happen after switching between the keyboard and gamepad UI), ALC says so instead of reporting a cleanup: ESO keeps that memory until the game is restarted, so ALC stops reloading for the pool until the next game launch.
 Unlike PC, where memory scales dynamically with a ~512 MB "soft limit" for UI lag, consoles have
 a strict 100 MB hardware memory pool for addons. Reaching the console cap will often cause the
 game to forcefully reload your UI or result in "Out of Memory" crashes.

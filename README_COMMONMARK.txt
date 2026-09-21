@@ -60,6 +60,8 @@ Auto Lua Memory Cleaner is event-driven first: real triggers (exiting combat, en
 
 **Important Note On Memory Usage (PC & Console):** unlike PC, where memory scales dynamically with a ~512 MB "soft limit" for UI lag, consoles have a strict 100 MB hardware memory pool for addons. Reaching the console cap will often cause the game to forcefully reload your UI or result in "Out of Memory" crashes.
 
+If an automatic pool reload frees less than 0.5 MB (this can happen after switching between the keyboard and gamepad UI), ALC says so instead of reporting a cleanup: ESO keeps that memory until the game is restarted, so ALC stops reloading for the pool until the next game launch.
+
 While this addon is highly effective at clearing out background "garbage" to keep you under those limits, it cannot magically lower your memory usage if you are running too many heavy addons at once. If your memory remains dangerously high even after a manual cleanup, you should consider disabling a few large addons to ensure stability.
 
 ## Do You Actually Need This? (PC & Console)
